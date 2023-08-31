@@ -33,7 +33,8 @@ class Analyzer(ast.NodeTransformer):
         if isinstance(node.func, ast.Attribute):
             print(node.func.attr)
         elif isinstance(node.func, ast.Name):
-            print(BLU(node.func.id))
+            print(node.func)
+            # print(BLU(node.func.id))
         else:
             print(RED("what else?"))
         return node
