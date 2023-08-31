@@ -13,13 +13,15 @@ def main():
         node = ast.parse(src.read())
 
     # print(ast.dump(node, indent=" "))
+    taint = TaintAnalyzer()
+    taint.visit(node) # intended dup-visit
+
+    print(GRN("======"))
+    print(taint.tainted_node)
+    print(GRN("======"))
 
     analyzer = Analyzer()
     transformed = analyzer.visit(node)
-
-    print(GRN("======"))
-    taint = TaintAnalyzer()
-    transformed = taint.visit(node) # intended dup-visit
 
     with open("transformed.py", "w") as dst:
         dst.write(ast.unparse(transformed))

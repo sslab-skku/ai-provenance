@@ -3,6 +3,8 @@ import ast
 from util import *
 
 class TaintAnalyzer(ast.NodeVisitor):
+    tainted_node = []
+
     def __init__(self):
         # self.stats = {"import": [], "class": [], "function": []}
         pass
@@ -10,9 +12,7 @@ class TaintAnalyzer(ast.NodeVisitor):
     def visit_Import(self, node):
         Import_names = [name.name for name in node.names]
 
-        print_Expr = GadgetGen.gen_Print(Import_names)
-
-        return [node, print_Expr]
+        return [node]
 
         '''
         for Import_name in Import_names:
