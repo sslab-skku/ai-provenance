@@ -7,6 +7,7 @@ from util import *
 class Analyzer(ast.NodeTransformer):
     def __init__(self):
         # self.stats = {"import": [], "class": [], "function": []}
+        self.tmp = 0
         pass
 
     def visit_Import(self, node):
@@ -26,10 +27,44 @@ class Analyzer(ast.NodeTransformer):
         '''
 
     def visit_Assign(self, node):
-        super(Analyzer, self).generic_visit(node)
+        lhs = node.targets
+        if isinstance(lhs[0], ast.Name):
+            print(lhs[0].id)
+
+        return [node]
+
+        print(type(node.value))
+        if isinstance(node.value, ast.Constant):
+            print(node.value.value)
+        elif isinstance(node.value, ast.Call):
+            if isinstance(node.value.func, ast.Attribute):
+                print(node.value.func.attr)
+            elif isinstance(node.value.func, ast.Name):
+                print(node.value.func.id)
+            else:
+                print(RED("what else?"))
+        # print(node)
+        # print(node.value)
         return [node]
  
     def visit_Call(self, node):
+        buf = ""
+        for arg in node.args:
+            if isinstance(arg, ast.Constant):
+                buf += arg.value + ", "
+            elif isinstance(arg, ast.Name):
+                buf += arg.id + ", "
+            else:
+                buf += str(type(arg)) + ", "
+
+        if "data, " in buf:
+            print(buf)
+
+        if buf != "" and False:
+            print(buf)
+
+        return node
+
         if isinstance(node.func, ast.Attribute):
             print(node.func.attr)
         elif isinstance(node.func, ast.Name):
