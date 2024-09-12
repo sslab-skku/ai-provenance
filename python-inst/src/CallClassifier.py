@@ -13,22 +13,19 @@ class CallClassifier():
         assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
 
         func = node.func
-        print(ast.dump(func))
 
         if isinstance(func, ast.Attribute):
             flatten_value = ""
-            value = func.value
+            value = func
+            # value = func.value
             while not isinstance(value, ast.Name):
                 flatten_value = f".{value.attr}{flatten_value}"
                 value = value.value
-            flatten_value = f"{value.id}.{flatten_value}"
             if value.id in self.import_as:
-                return f"{self.import_as[value.id]}.{flatten_value}"
+                return f"{self.import_as[value.id]}{flatten_value}"
             else:
                 # always var.method
-                return f"{flatten_value}"
-                # return f"{func.attr}"
-                # return f"{func.value.id}.{func.attr}"
+                return f"{value.id}{flatten_value}"
         else:
             if func.id in self.import_as:
                 return f"{self.import_as[func.id]}"
@@ -49,7 +46,6 @@ class CallClassifier():
             for import_all in self.from_import_all:
                 result.append(f"{import_all}.{fullname}")
 
-        print(result)
         return result
 
 
@@ -95,6 +91,7 @@ class CallClassifier():
 
         func = node.func
         fullnames = self.getMethodFullName(node)
+        print(f"isReadDataset: {fullnames}")
 
         if "pandas.read_csv" in fullnames:
             return True
