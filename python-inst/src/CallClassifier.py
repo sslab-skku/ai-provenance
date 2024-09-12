@@ -13,13 +13,21 @@ class CallClassifier():
         assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
 
         func = node.func
+        print(ast.dump(func))
 
         if isinstance(func, ast.Attribute):
-            if func.value.id in self.import_as:
-                return f"{self.import_as[func.value.id]}.{func.attr}"
+            flatten_value = ""
+            value = func.value
+            while not isinstance(value, ast.Name):
+                flatten_value = f".{value.attr}{flatten_value}"
+                value = value.value
+            flatten_value = f"{value.id}.{flatten_value}"
+            if value.id in self.import_as:
+                return f"{self.import_as[value.id]}.{flatten_value}"
             else:
                 # always var.method
-                return f"{func.attr}"
+                return f"{flatten_value}"
+                # return f"{func.attr}"
                 # return f"{func.value.id}.{func.attr}"
         else:
             if func.id in self.import_as:
