@@ -2,15 +2,26 @@ import ast
 from util import *
 from CallClassifier import CallClassifier 
 
-def create_log(msg):
-    log_code = f"logger.log(\"{msg}\")"
-    log_node = ast.parse(log_code).body[0]
-    return log_node
-
-class CallTracker(ast.NodeTransformer):
+class Logger(ast.NodeTransformer):
     def __init__(self, call_classifier):
         self.call_classifier = call_classifier
         self.cc = self.call_classifier
+
+    def visit_Module(self, node):
+        insert_code = (
+            f"import time\n"
+            f"class ProvenanceLogger:\n"
+            f"    def __init__(self, filename):\n"
+            f"        self.logfile = open(filename, \'a\')\n"
+            f"    def log(self, msg):\n"
+            f"        timestamp = time.ctime()\n"
+            f"        self.logfile.write(timestamp + \": \" + msg + \"\\n\")"
+            f"\n"
+            f"logger = ProvenanceLogger(\"logfile\")\n"
+        )
+        insert_node = ast.parse(insert_code).body
+        node.body = insert_node + node.body
+        return node
 
     def visit_Call(self, node):
         return node
@@ -44,6 +55,8 @@ class CallTracker(ast.NodeTransformer):
         lhs = node.targets
         rhs = node.value
 
+        print("Loggerassign")
+
         if not isinstance(rhs, ast.Call):
             return [node]
         
@@ -51,7 +64,7 @@ class CallTracker(ast.NodeTransformer):
         if self.cc.isReadDataset(rhs):
             filename = rhs.args[0].value
             var = lhs[0].id
-            msg = f"Read dataset from {filename} to {var}"
+            msg = f"Read dataset from {filename} to {var}\n"
             result.append(create_log(msg))
 
         result.append(node)

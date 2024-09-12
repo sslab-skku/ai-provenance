@@ -13,8 +13,10 @@ from CallTracker import CallTracker
 from InsertPolicy import InsertPolicy
 from Rule3 import Rule3
 from Rule4 import Rule4
+from Logger import Logger
 
 def main():
+    '''
     targets = [
         "../examples/target1_dpreg.py",
         "../examples/target2_dropfbs.py",
@@ -23,6 +25,8 @@ def main():
         "../examples/target5_svm.py",
         "../examples/target6_svmminmax.py",
     ]
+    '''
+    targets = [ "../examples/simple.py" ]
 
     if not os.path.exists("transformed"):
         os.mkdir("transformed")
@@ -30,6 +34,8 @@ def main():
     for target in targets:
         with open(target, "r") as src:
             node = ast.parse(src.read())
+
+        print(target)
 
         # print(ast.dump(node, indent=" "))
         # taint = TaintAnalyzer()
@@ -62,6 +68,9 @@ def main():
         insert_policy = InsertPolicy(call_classifier)
         curnode = insert_policy.visit(curnode)
 
+        logger = Logger(call_classifier)
+        curnode = logger.visit(curnode)
+
         call_tracker = CallTracker(call_classifier)
         curnode = call_tracker.visit(curnode)
 
@@ -75,7 +84,7 @@ def main():
         filename = target.split("/")[-1]
         with open("./transformed/transformed_" + filename, "w") as dst:
             dst.write(ast.unparse(curnode))
-        # print(ast.dump(after_ct, indent=2))
+        # print(ast.dump(curnode, indent=2))
 
 if __name__ == "__main__":
     main()
