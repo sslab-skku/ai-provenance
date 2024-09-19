@@ -20,6 +20,7 @@ def parse_args():
     subparser_gen = subparser.add_parser("gen")
     subparser_gen.add_argument("-i", "--in-file", type=str, default="spec.csv")
     subparser_gen.add_argument("-o", "--out-file", type=str, default="dataset.csv")
+    subparser_gen.add_argument("-p", "--policy-file", type=str, default="policy.csv")
 
     if len(sys.argv) <= 1:
         parser.print_usage()
@@ -30,7 +31,7 @@ def parse_args():
     if args.command == "spec":
         prompt_spec(ofile=args.out_file, append=args.append)
     elif args.command == "gen":
-        gen_dataset(ifile=args.in_file, ofile=args.out_file)
+        gen_dataset(ifile=args.in_file, ofile=args.out_file, pfile=args.policy_file)
     else:
         raise ValueError(f"Unexpected command: {args.command}")
 
@@ -61,8 +62,8 @@ def prompt_spec(ofile, append):
 
     of.close()
 
-def gen_dataset(ifile, ofile):
-    N = 1000
+def gen_dataset(ifile, ofile, pfile):
+    N = 10000
 
     csvfile = open(ifile)
 
@@ -70,11 +71,14 @@ def gen_dataset(ifile, ofile):
     columns = []
     fields = {}
     weightsum = [0] * N
+    policy = []
 
     for row in reader:
         field = row["field"]
         datatype = str_formatter(row["type"])
         private = str_formatter(row["priv"])
+
+        policy.append({"field": field, "priv": private, "target": False})
 
         if datatype == "str":
             fields[field] = [random_str() for _ in range(N)]
@@ -112,11 +116,19 @@ def gen_dataset(ifile, ofile):
             columns[i][key] = fields[key][i]
         columns[i]["Target"] = (weightsum[i] > 0.5)
 
+    policy.append({"field": "Target", "priv": False, "target": True})
+
     of = open(ofile, "w")
-    writer = csv.DictWriter(of, fieldnames=list(columns[0].keys()))
+    writer = csv.DictWriter(of, fieldnames=columns[0].keys())
     writer.writeheader()
     writer.writerows(columns)
     of.close()
+
+    pf = open(pfile, "w")
+    writer = csv.DictWriter(pf, fieldnames=policy[0].keys())
+    writer.writeheader()
+    writer.writerows(policy)
+    pf.close()
 
 def str_formatter(s):
     list_true = ["t", "T", "true", "True"]
