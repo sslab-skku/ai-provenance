@@ -1,0 +1,10 @@
+field,type,weight,min,max,avg,priv
+Name,str,,,,,True
+Age,int,0.2,10,80,40,True
+Sex,bool,0.1,,,,True
+Height,float,0.1,110,200,160,False
+Weight,float,0.4,30,130,60,False
+Glucose,float,0.7,50,150,80,False
+HDL,float,-0.4,5,80,30,False
+LDL,float,0.3,5,200,80,False
+BloodPressure,float,0.5,80,180,120,False
