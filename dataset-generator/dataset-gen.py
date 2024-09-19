@@ -38,7 +38,8 @@ def prompt_spec(ofile, append):
     of = open(ofile, "a" if append else "w")
 
     print("[*] Generating spec")
-    of.write("field,type,weight,min,max,avg,priv\n")
+    if not append:
+        of.write("field,type,weight,min,max,avg,priv\n")
     while True:
         to_write = ""
         field       =   str(input("Field              : "))
