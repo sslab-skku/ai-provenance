@@ -85,6 +85,15 @@ class Logger(ast.NodeTransformer):
             tx = "read"
             desc = f"\"{var}=read({filename})\""
             result.append(create_log(dbfile, tx, desc))
+        elif self.cc.isDrop(rhs):
+            aself = self.cc.extractSelf(rhs)
+            arg0 = rhs.args[0]
+            ret0 = lhs[0]
+            print(f"{ret0.id}=drop({arg0.value})")
+            tx = "drop"
+            desc = f"\"{ret0.id}=drop({arg0.value})\""
+            dbfile = "DBFILFE"
+            result.append(create_log(dbfile, tx, desc))
 
         result.append(node)
         return result
