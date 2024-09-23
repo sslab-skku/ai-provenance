@@ -1,6 +1,12 @@
 import ast
 from util import *
 from CallClassifier import CallClassifier 
+import os
+
+def create_log(dbfile, tx, desc):
+    log_code = f"logger.log(\'{dbfile}\',\'{tx}\',{desc})"
+    log_node = ast.parse(log_code).body[0]
+    return log_node
 
 class Logger(ast.NodeTransformer):
     def __init__(self, call_classifier):
@@ -13,14 +19,17 @@ class Logger(ast.NodeTransformer):
             f"class ProvenanceLogger:\n"
             f"    def __init__(self, filename):\n"
             f"        self.logfile = open(filename, \'a\')\n"
-            f"    def log(self, msg):\n"
-            f"        timestamp = time.ctime()\n"
-            f"        self.logfile.write(timestamp + \": \" + msg + \"\\n\")"
+            f"    def log(self, dbfile, tx, desc):\n"
+            f"        curtime = time.ctime()\n"
+            f"        self.logfile.write(f'{{curtime}},{{__file__}},{{dbfile}},{{tx}},\"{{desc}}\"\\n')"
             f"\n"
             f"logger = ProvenanceLogger(\"logfile\")\n"
         )
         insert_node = ast.parse(insert_code).body
         node.body = insert_node + node.body
+
+        self.generic_visit(node)
+
         return node
 
     def visit_Call(self, node):
@@ -37,16 +46,25 @@ class Logger(ast.NodeTransformer):
             args = [name.id for name in call.args]
             # TODO: relate args to original dataset variable
             # e.g., relate x_train, y_train with df
+
+            var_cols_x = f"__cols_{args[0]}"
+            var_cols_y = f"__cols_{args[1]}"
+
             insert_code = (
-                f"print(\"[Log] Training model with argument {args}\")\n"
-                f"__cols_{args[0]} = list({args[0]}.columns.values)\n"
-                f"__cols_{args[1]} = {args[1]}.name\n"
-                f"print(f\"[Log] columns from {args[0]}: {{__cols_{args[0]}}}\")\n"
-                f"print(f\"[Log]   private columns: {{[col for col in __cols_{args[0]} if __policy_df[col] == 1]}}\")\n"
-                f"print(f\"[Log] columns from {args[1]}: {{__cols_{args[1]}}}\")\n"
+                f"{var_cols_x} = list({args[0]}.columns.values)\n"
+                f"{var_cols_y} = {args[1]}.name\n"
             )
             insert_node = ast.parse(insert_code).body
             result.extend(insert_node)
+
+            dbfile = "DBFILE"
+            tx = "train"
+            descx = f"{var_cols_x}"
+            descy = f"{var_cols_y}"
+            desc = "\"args0:\"+" + "f\"{" + descx + "}\""
+            desc += "\" args1:\"+" + "f\"{" + descy + "}\""
+            desc += "\" priv:\"+" + f"f\"{{[col for col in {var_cols_x} if __policy_df[col]['priv']]}}\""
+            result.append(create_log(dbfile, tx, desc))
 
         result.append(node)
         return result
@@ -55,8 +73,6 @@ class Logger(ast.NodeTransformer):
         lhs = node.targets
         rhs = node.value
 
-        print("Loggerassign")
-
         if not isinstance(rhs, ast.Call):
             return [node]
         
@@ -64,8 +80,11 @@ class Logger(ast.NodeTransformer):
         if self.cc.isReadDataset(rhs):
             filename = rhs.args[0].value
             var = lhs[0].id
-            msg = f"Read dataset from {filename} to {var}\n"
-            result.append(create_log(msg))
+            filename = os.path.abspath(filename)
+            dbfile = f"{filename}"
+            tx = "read"
+            desc = f"\"{var}=read({filename})\""
+            result.append(create_log(dbfile, tx, desc))
 
         result.append(node)
         return result
