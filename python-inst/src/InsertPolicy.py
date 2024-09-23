@@ -1,4 +1,7 @@
 import ast
+import csv
+import os
+
 from util import *
 from CallClassifier import CallClassifier 
 
@@ -16,14 +19,23 @@ class InsertPolicy(ast.NodeTransformer):
         
         result = []
         if self.cc.isReadDataset(rhs):
-            filename = rhs.args[0].value
+            filename = os.path.abspath(rhs.args[0].value)
             var = lhs[0].id
 
-            # TODO: read policy.xml here using filename (heart.csv)
-            # seriously, why xml?
-            cols = {"age": 1, "sex": 1, "cp": 1, "trestbps": 0, "chol": 0, "fbs": 1, "restecg": 1,
-                "thalach": 0, "exang": 0, "oldpeak": 0, "slope": 0, "ca": 1, "thal": 1, "target": 1}
-            
+            (filepath, ext) = os.path.splitext(filename)
+            policy_filepath = filepath + ".policy.csv"
+
+            policy_file = open(policy_filepath)
+            reader = csv.DictReader(policy_file)
+            cols = {}
+            for row in reader:
+                field = row["field"]
+                priv = (row["priv"] == "True")
+                datatype = row["type"]
+                target = (row["target"] == "True")
+
+                cols[field] = { "priv": priv, "type": datatype, "target": target }
+
             insert_code = (
                 f"__policy_{var} = {cols}\n"
             )
