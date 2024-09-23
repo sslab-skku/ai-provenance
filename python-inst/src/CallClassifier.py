@@ -2,12 +2,25 @@
 # same role with KB (knowledge base) from Vamsa (KDD '20)
 
 import ast
+import json
 from util import *
 
 class CallClassifier():
-    def __init__(self, import_as, from_import_all):
+    def __init__(self, import_as, from_import_all, kbpath):
         self.import_as = import_as
         self.from_import_all = from_import_all
+        self.kb = {}
+        with open(kbpath) as kbfile:
+            kb_json = json.load(kbfile)
+            for kb in kb_json:
+                method = kb["method"]
+                action = kb["action"]
+                finput = kb["input"]
+                foutput = kb["output"]
+
+                self.kb[method] = { "action": action, "input": finput, "output": foutput }
+
+        print(self.kb)
 
     def getMethodFullName(self, node):
         assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
@@ -22,14 +35,18 @@ class CallClassifier():
                 flatten_value = f".{value.attr}{flatten_value}"
                 value = value.value
             if value.id in self.import_as:
+                # print(f"{self.import_as[value.id]}{flatten_value}")
                 return f"{self.import_as[value.id]}{flatten_value}"
             else:
                 # always var.method
+                # print(f"{value.id}{flatten_value}")
                 return f"{value.id}{flatten_value}"
         else:
             if func.id in self.import_as:
+                # print(f"{self.import_as[func.id]}")
                 return f"{self.import_as[func.id]}"
             else:
+                # print(f"{func.id}")
                 return f"{func.id}"
 
     def getPossibleMethodFullName(self, node):
@@ -79,9 +96,14 @@ class CallClassifier():
         assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
 
         func = node.func
-        fullnames = self.getMethodFullName(node)
+        fullname = self.getMethodFullName(node)
 
-        if "drop" in fullnames:
+        if "." not in fullname:
+            return False
+
+        methodname = fullname.split(".")[-1]
+
+        if methodname == "drop":
             return True
 
         return False
@@ -90,10 +112,17 @@ class CallClassifier():
         assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
 
         func = node.func
-        fullnames = self.getMethodFullName(node)
-        print(f"isReadDataset: {fullnames}")
+        fullname = self.getMethodFullName(node)
 
-        if "pandas.read_csv" in fullnames:
+        if fullname in self.kb and self.kb[fullname]["action"] == "read":
             return True
 
         return False
+
+    def extractSelf(self, node):
+        assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
+
+        func = node.func
+        fullname = self.getMethodFullName(node)
+
+        return fullname.split(".")[:-1]
