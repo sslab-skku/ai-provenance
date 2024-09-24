@@ -20,7 +20,7 @@ class CallClassifier():
 
                 self.kb[method] = { "action": action, "input": finput, "output": foutput }
 
-        print(self.kb)
+        # print(self.kb)
 
     def getMethodFullName(self, node):
         assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
@@ -65,6 +65,13 @@ class CallClassifier():
 
         return result
 
+    def extractSelf(self, node):
+        assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
+
+        func = node.func
+        fullname = self.getMethodFullName(node)
+
+        return fullname.split(".")[:-1][0]
 
     def isSplit(self, node):
         assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
@@ -118,11 +125,3 @@ class CallClassifier():
             return True
 
         return False
-
-    def extractSelf(self, node):
-        assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
-
-        func = node.func
-        fullname = self.getMethodFullName(node)
-
-        return fullname.split(".")[:-1]

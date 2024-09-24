@@ -3,11 +3,11 @@
     "method": "sklearn.model_selection.train_test_split",
     "action": "split",
     "input": {
-        "arg0": "col1",
-        "arg1": "col2"
+        "arg0": "datasetcols",
+        "arg1": "datasetcol"
     },
     "output": {
-        "ret0": "(train1, test1, train2, test2)"
+        "ret0": "(datasetcols, datasetcols, datasetcol, datasetcol)"
     }
 },
 {
