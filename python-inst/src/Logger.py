@@ -3,9 +3,10 @@ from util import *
 from CallClassifier import CallClassifier 
 from VariableTracker import VariableTracker
 import os
+import csv
 
-def create_log(dbfile, tx, desc):
-    log_code = f"logger.log({dbfile},\'{tx}\',{desc})"
+def create_log(dbfile, lineno, tx, desc):
+    log_code = f"logger.log({dbfile},{lineno},\'{tx}\',{desc})"
     log_node = ast.parse(log_code).body[0]
     return log_node
 
@@ -22,9 +23,9 @@ class Logger(ast.NodeTransformer):
             f"class ProvenanceLogger:\n"
             f"    def __init__(self, filename):\n"
             f"        self.logfile = open(filename, \'a\')\n"
-            f"    def log(self, dbfile, tx, desc):\n"
+            f"    def log(self, dbfile, lineno, tx, desc):\n"
             f"        curtime = time.ctime()\n"
-            f"        self.logfile.write(f'{{curtime}},{{__file__}},{{dbfile}},{{tx}},\"{{desc}}\"\\n')"
+            f"        self.logfile.write(f'{{curtime}},{{__file__}},{{dbfile}},{{lineno}},{{tx}},\"{{desc}}\"\\n')"
             f"\n"
             f"logger = ProvenanceLogger(\"logfile\")\n"
         )
@@ -71,7 +72,7 @@ class Logger(ast.NodeTransformer):
             desc = "\"args0:\"+" + "f\"{" + descx + "}\""
             desc += "\" args1:\"+" + "f\"{" + descy + "}\""
             desc += "\" priv:\"+" + f"f\"{{[col for col in {var_cols_x} if __policy_df[col]['priv']]}}\""
-            result.append(create_log(dbfile, tx, desc))
+            result.append(create_log(dbfile, node.lineno, tx, desc))
 
         result.append(node)
         return result
@@ -84,25 +85,31 @@ class Logger(ast.NodeTransformer):
             return self.check_assign_call(node)
         elif isinstance(rhs, ast.Subscript):
             # check dataset slicing/indexing
-            print(rhs.value.id)
-            ret0 = lhs[0].id
-            rhs0 = rhs.value.id
-            rhs1 = rhs.slice.value
 
-            ret0_db = f"__dbfile_{ret0}"
+            result = [node]
+
+            lhs0 = lhs[0].id
+            rhs0 = rhs.value.id
+            rhsidx = rhs.slice.value
+
+            lhs0_db = f"__dbfile_{lhs0}"
             rhs0_db = f"__dbfile_{rhs0}"
 
-            ret0_cols = f"__cols_{ret0}"
+            lhs0_cols = f"__cols_{lhs0}"
 
             insert_code = ""
-            if f"{ret0_db}" !=  f"{rhs0_db}":
-                insert_code += f"{ret0_db} = {rhs0_db}\n"
-            insert_code += f"{ret0_cols} = [\"{rhs1}\"]\n"
+            if f"{lhs0_db}" !=  f"{rhs0_db}":
+                insert_code += f"{lhs0_db} = {rhs0_db}\n"
+            insert_code += f"{lhs0_cols} = [\"{rhsidx}\"]\n"
             insert_node = ast.parse(insert_code).body
             result = [node]
             result.append(insert_node)
-            print(insert_code)
-            # print(f"{ret0} = {rhs0}")
+
+            dbfile = "f\"{" + f"{lhs0_db}" + "}\""
+            tx = "\"assign(\\\'" + rhsidx + "\\\')\""
+            desc = "\"" + f"{lhs0} <- {rhs0}" + "\""
+            result.append(create_log(dbfile, node.lineno, tx, desc))
+
             return result
         else:
             return [node]
@@ -114,12 +121,39 @@ class Logger(ast.NodeTransformer):
         result = [node]
 
         if self.cc.isReadDataset(rhs):
-            tx = "read"
+            tx = "\"read"
+            tx += "(\\\'" + rhs.args[0].value + "\\\')\""
+            ###
+            filename = os.path.abspath(rhs.args[0].value)
+            var = lhs[0].id
+
+            (filepath, ext) = os.path.splitext(filename)
+            policy_filepath = filepath + ".policy.csv"
+
+            policy_file = open(policy_filepath)
+            reader = csv.DictReader(policy_file)
+            cols = {}
+            for row in reader:
+                field = row["field"]
+                priv = (row["priv"] == "True")
+                datatype = row["type"]
+                target = (row["target"] == "True")
+
+                cols[field] = { "priv": priv, "type": datatype, "target": target }
+
+            insert_code = (
+                f"__policy_{var} = {cols}\n"
+            )
+            insert_node = ast.parse(insert_code)
+            result.extend(insert_node.body)
+            ###
 
             arg0 = rhs.args[0].value
             ret0 = lhs[0].id
 
             filename = os.path.abspath(arg0)
+            (filepath, ext) = os.path.splitext(filename)
+            policy_filename = filepath + ".policy.csv"
 
             ret0_db = f"__dbfile_{ret0}"
             ret0_cols = f"__cols_{ret0}"
@@ -135,16 +169,18 @@ class Logger(ast.NodeTransformer):
 
             desc =  "\"" + f"{ret0}: " + "\"" + "f\"{" + f"{ret0_cols}" + "}\""
 
-            result.append(create_log(dbfile, tx, desc))
+            result.append(create_log(dbfile, node.lineno, tx, desc))
 
             self.vt.insert_typemap(f"{arg0}", "filename")
             self.vt.insert_typemap(f"{ret0}", "dataset")
         elif self.cc.isDrop(rhs):
-            tx = "drop"
+            tx = "\"drop"
 
             aself = self.cc.extractSelf(rhs)
             arg0 = rhs.args[0].value
             ret0 = lhs[0].id
+
+            tx += "(\\\'" + arg0 + "\\\')\""
 
             aself_db = f"__dbfile_{aself}"
             ret0_db = f"__dbfile_{ret0}"
@@ -163,14 +199,16 @@ class Logger(ast.NodeTransformer):
             result.append(insert_node)
 
             dbfile = "f\"{" + f"{ret0_db}" + "}\""
-            desc = "\"" + f"{ret0}: " + "\"" + "f\"{" + f"{ret0_cols}" + "}\""
+            # desc = "\"" + f"{ret0}: " + "\"" + "f\"{" + f"{ret0_cols}" + "}\""
+            desc = "\"" + f"{ret0} <- {aself}" + "\""
 
-            result.append(create_log(dbfile, tx, desc))
+            result.append(create_log(dbfile, node.lineno, tx, desc))
 
             self.vt.insert_typemap(f"{aself}", "dataset")
             self.vt.insert_typemap(f"{ret0}", "dataset")
+
         elif self.cc.isSplit(rhs):
-            tx = "assign"
+            tx = "split"
 
             arg0 = rhs.args[0].id
             arg1 = rhs.args[1].id
@@ -209,19 +247,32 @@ class Logger(ast.NodeTransformer):
             result.append(insert_node)
 
             dbfile00 = "f\"{" + f"{ret00_db}" + "}\""
-            desc00 = "\"" + f"{ret0[0].id}: " + "\"" + "f\"{" + f"{ret00_cols}" + "}\""
-            result.append(create_log(dbfile00, tx, desc00))
+            # desc00 = "\"" + f"{ret0[0].id}: " + "\"" + "f\"{" + f"{ret00_cols}" + "}\""
+            desc00 = "\"" + f"{ret0[0].id} <- {arg0}" + "\""
+            result.append(create_log(dbfile00, node.lineno, tx, desc00))
 
             dbfile01 = "f\"{" + f"{ret01_db}" + "}\""
-            desc01 = "\"" + f"{ret0[1].id}: " + "\"" + "f\"{" + f"{ret01_cols}" + "}\""
-            result.append(create_log(dbfile01, tx, desc01))
+            # desc01 = "\"" + f"{ret0[1].id}: " + "\"" + "f\"{" + f"{ret01_cols}" + "}\""
+            desc01 = "\"" + f"{ret0[1].id} <- {arg0}" + "\""
+            result.append(create_log(dbfile01, node.lineno, tx, desc01))
 
             dbfile02 = "f\"{" + f"{ret02_db}" + "}\""
-            desc02 = "\"" + f"{ret0[2].id}: " + "\"" + "f\"{" + f"{ret02_cols}" + "}\""
-            result.append(create_log(dbfile02, tx, desc02))
+            # desc02 = "\"" + f"{ret0[2].id}: " + "\"" + "f\"{" + f"{ret02_cols}" + "}\""
+            desc02 = "\"" + f"{ret0[2].id} <- {arg1}" + "\""
+            result.append(create_log(dbfile02, node.lineno, tx, desc02))
 
             dbfile03 = "f\"{" + f"{ret03_db}" + "}\""
-            desc03 = "\"" + f"{ret0[3].id}: " + "\"" + "f\"{" + f"{ret03_cols}" + "}\""
-            result.append(create_log(dbfile03, tx, desc03))
+            # desc03 = "\"" + f"{ret0[3].id}: " + "\"" + "f\"{" + f"{ret03_cols}" + "}\""
+            desc03 = "\"" + f"{ret0[3].id} <- {arg1}" + "\""
+            result.append(create_log(dbfile03, node.lineno, tx, desc03))
+
+        elif self.cc.isPseudonymize(rhs):
+            tx = "pseudonymize"
+
+            arg0 = rhs.args[0].id
+            ret0 = lhs[0].id
+
+            desc = "\"" + f"{ret0} <- {arg0}" + "\""
+            result.append(create_log("\"DBFILE\"", node.lineno, tx, desc))
 
         return result

@@ -20,7 +20,7 @@ class CallClassifier():
 
                 self.kb[method] = { "action": action, "input": finput, "output": foutput }
 
-        # print(self.kb)
+        print(self.kb)
 
     def getMethodFullName(self, node):
         assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
@@ -110,7 +110,7 @@ class CallClassifier():
 
         methodname = fullname.split(".")[-1]
 
-        if methodname == "drop":
+        if methodname in self.kb and self.kb[methodname]["action"] == "drop":
             return True
 
         return False
@@ -122,6 +122,17 @@ class CallClassifier():
         fullname = self.getMethodFullName(node)
 
         if fullname in self.kb and self.kb[fullname]["action"] == "read":
+            return True
+
+        return False
+
+    def isPseudonymize(self, node):
+        assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
+
+        func = node.func
+        fullname = self.getMethodFullName(node)
+
+        if fullname in self.kb and self.kb[fullname]["action"] == "pseudonymize":
             return True
 
         return False
