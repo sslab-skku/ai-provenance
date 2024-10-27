@@ -27,27 +27,30 @@ class CallClassifier():
 
         func = node.func
 
-        if isinstance(func, ast.Attribute):
-            flatten_value = ""
-            value = func
-            # value = func.value
-            while not isinstance(value, ast.Name):
-                flatten_value = f".{value.attr}{flatten_value}"
-                value = value.value
-            if value.id in self.import_as:
-                # print(f"{self.import_as[value.id]}{flatten_value}")
-                return f"{self.import_as[value.id]}{flatten_value}"
+        try:
+            if isinstance(func, ast.Attribute):
+                flatten_value = ""
+                value = func
+                # value = func.value
+                while not isinstance(value, ast.Name):
+                    flatten_value = f".{value.attr}{flatten_value}"
+                    value = value.value
+                if value.id in self.import_as:
+                    # print(f"{self.import_as[value.id]}{flatten_value}")
+                    return f"{self.import_as[value.id]}{flatten_value}"
+                else:
+                    # always var.method
+                    # print(f"{value.id}{flatten_value}")
+                    return f"{value.id}{flatten_value}"
             else:
-                # always var.method
-                # print(f"{value.id}{flatten_value}")
-                return f"{value.id}{flatten_value}"
-        else:
-            if func.id in self.import_as:
-                # print(f"{self.import_as[func.id]}")
-                return f"{self.import_as[func.id]}"
-            else:
-                # print(f"{func.id}")
-                return f"{func.id}"
+                if func.id in self.import_as:
+                    # print(f"{self.import_as[func.id]}")
+                    return f"{self.import_as[func.id]}"
+                else:
+                    # print(f"{func.id}")
+                    return f"{func.id}"
+        except AttributeError:
+            return ""
 
     def getPossibleMethodFullName(self, node):
         assert isinstance(node, ast.Call), RED("Given node is not ast.Call")

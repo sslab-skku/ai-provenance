@@ -54,6 +54,8 @@ class Logger(ast.NodeTransformer):
             var_cols_x = f"__cols_{args[0]}"
             var_cols_y = f"__cols_{args[1]}"
 
+            print(ast.dump(call.func))
+            aself = self.cc.extractSelf(call)
 
             '''
             insert_code = (
@@ -69,9 +71,10 @@ class Logger(ast.NodeTransformer):
             descx = f"{var_cols_x}"
             descy = f"{var_cols_y}"
 
-            desc = "\"args0:\"+" + "f\"{" + descx + "}\""
-            desc += "\" args1:\"+" + "f\"{" + descy + "}\""
-            desc += "\" priv:\"+" + f"f\"{{[col for col in {var_cols_x} if __policy_df[col]['priv']]}}\""
+            # desc = "\"args0:\"+" + "f\"{" + descx + "}\""
+            # desc += "\" args1:\"+" + "f\"{" + descy + "}\""
+            # desc += "\" priv:\"+" + f"f\"{{[col for col in {var_cols_x} if __policy_df[col]['priv']]}}\""
+            desc = "\"" + f"{aself} <- {args[0]}, {args[1]}" + "\""
             result.append(create_log(dbfile, node.lineno, tx, desc))
 
         result.append(node)
@@ -117,7 +120,7 @@ class Logger(ast.NodeTransformer):
     def check_assign_call(self, node):
         lhs = node.targets
         rhs = node.value
-        
+
         result = [node]
 
         if self.cc.isReadDataset(rhs):
