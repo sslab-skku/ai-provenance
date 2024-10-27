@@ -1,8 +1,10 @@
 graph LR
 
 D1("./dataset.csv")
+SC1M1("model")
 
 D1--->SC1N1
+SC1N10--->SC1M1
 
 subgraph sc1 ["/home/kimjy/ai-provenance/python-inst/scenario/transformed_script1.py"]
     SC1N1("line 16: read('./dataset.csv')")
@@ -23,5 +25,7 @@ subgraph sc1 ["/home/kimjy/ai-provenance/python-inst/scenario/transformed_script
     SC1N4--"x_test"-->SC1N7
     SC1N5--"y_train"-->SC1N8
     SC1N5--"y_test"-->SC1N9
+    SC1N6--"x_train"-->SC1N10
+    SC1N8--"y_train"-->SC1N10
 end
 

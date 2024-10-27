@@ -21,12 +21,17 @@ class Graph:
         for script in self.scripts.values():
             for (dbname, dbnode) in script.databases.items():
                 graph += f"{dbnode}(\"{dbname}\")\n"
+            for (modelname, modelnode) in script.models.items():
+                graph += f"{modelnode}(\"{modelname}\")\n"
         graph += "\n"
 
         for script in self.scripts.values():
             for edge in script.edges:
                 lhs = edge.split("--")[0]
+                rhs = edge.split("-->")[1]
                 if lhs in script.databases.values():
+                    graph += edge + "\n"
+                if rhs in script.models.values():
                     graph += edge + "\n"
         graph += "\n"
 
@@ -36,7 +41,9 @@ class Graph:
                 graph += "    " + nodename + "(\"" + node + "\")\n"
             for edge in script.edges:
                 lhs = edge.split("--")[0]
-                if lhs not in script.databases.values():
+                rhs = edge.split("-->")[1]
+                if lhs not in script.databases.values() \
+                    and rhs not in script.models.values():
                     graph += "    " + edge + "\n"
             graph += "end\n"
 
@@ -50,6 +57,7 @@ class Script:
         self.var_last_appear = dict()
 
         self.databases = dict()
+        self.models = dict()
 
         self.scriptid = sid
 
@@ -75,6 +83,17 @@ class Script:
         self.databases[filename] = dbname
 
         return dbname
+    
+    def new_model(self, modelname):
+        # CAUTION: it is varname -> modelid relation, which is opposite of node
+
+        if modelname in self.models:
+            return self.models[modelname]
+
+        modelid = f"SC{self.scriptid}M{len(self.models)+1}"
+        self.models[modelname] = modelid
+
+        return modelid
 
     def insert_dataflow(self, lineno, action, dataflow):
         newnode = self.new_node(f"line {lineno}: {action}")
@@ -89,7 +108,20 @@ class Script:
 
             self.edges.append(f"{dbnode}--->{newnode}")
         elif "train" in action:
-            pass
+            lhs, rhs = dataflow.split(" <- ", maxsplit=1)
+
+            rhss = rhs.split(", ")
+            self.var_last_appear[lhs] = newnode
+            for rhs in rhss:
+                rhs_appear = self.var_last_appear[rhs]
+
+                self.edges.append(f"{rhs_appear}--\"{rhs}\"-->{newnode}")
+
+            modelname = lhs
+            modelnode = self.new_model(modelname)
+            self.var_last_appear[lhs] = modelnode
+
+            self.edges.append(f"{newnode}--->{modelnode}")
         else:
             lhs, rhs = dataflow.split(" <- ", maxsplit=1)
             # lhs <- rhs
