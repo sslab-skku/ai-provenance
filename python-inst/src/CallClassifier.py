@@ -129,6 +129,17 @@ class CallClassifier():
 
         return False
 
+    def isProcess(self, node):
+        assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
+
+        func = node.func
+        fullname = self.getMethodFullName(node)
+
+        if fullname in self.kb and self.kb[fullname]["action"] == "process":
+            return True
+
+        return False
+
     def isPseudonymize(self, node):
         assert isinstance(node, ast.Call), RED("Given node is not ast.Call")
 

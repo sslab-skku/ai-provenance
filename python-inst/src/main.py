@@ -28,8 +28,9 @@ def main():
         "../examples/target6_svmminmax.py",
     ]
     '''
-    targets = ["../scenario/script1.py"]
-    # targets = ["../../ai-examples/facial_recog/detector.py"]
+    # targets = ["../scenario/script1.py"]
+    targets = ["../../ai-examples/facial_recog/detector.py"]
+    targets = ["../../../privacy_demo/main.py"]
 
     '''
     if not os.path.exists("transformed"):
@@ -42,7 +43,7 @@ def main():
 
         print(target)
 
-        os.chdir("../scenario")
+        # os.chdir("../scenario")
 
         # print(ast.dump(node, indent=" "))
         # taint = TaintAnalyzer()
@@ -73,8 +74,8 @@ def main():
         call_classifier = CallClassifier(import_as, from_import_all, basedir + "/KB.json")
         variable_tracker = VariableTracker()
 
-        insert_policy = InsertPolicy(call_classifier)
-        curnode = insert_policy.visit(curnode)
+        # insert_policy = InsertPolicy(call_classifier)
+        # curnode = insert_policy.visit(curnode)
 
         logger = Logger(call_classifier, variable_tracker)
         curnode = logger.visit(curnode)
@@ -92,10 +93,11 @@ def main():
 
         filename = target.split("/")[-1]
 
-        os.chdir(basedir)
+        # os.chdir(basedir)
 
         # with open("./transformed/transformed_" + filename, "w") as dst:
-        with open("../scenario/transformed_" + filename, "w") as dst:
+        # with open("../scenario/transformed_" + filename, "w") as dst:
+        with open("../../../privacy_demo/transformed_" + filename, "w") as dst:
             dst.write(ast.unparse(curnode))
         # print(ast.dump(curnode, indent=2))
 

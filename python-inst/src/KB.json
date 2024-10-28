@@ -40,5 +40,37 @@
     "output": {
         "ret0": "dataset"
     }
+},
+{
+    "method": "face_recognition.load_image_file",
+    "action": "read",
+    "input": {
+        "arg0": "filename"
+    },
+    "output": {
+        "ret0": "dataset"
+    }
+},
+{
+    "method": "face_recognition.face_locations",
+    "action": "face_locations",
+    "input": {
+        "arg0": "dataset",
+        "arg1": ""
+    },
+    "output": {
+        "ret0": "dataset"
+    }
+},
+{
+    "method": "face_recognition.face_encodings",
+    "action": "face_encodings",
+    "input": {
+        "arg0": "dataset",
+        "arg1": ""
+    },
+    "output": {
+        "ret0": "dataset"
+    }
 }
 ]
