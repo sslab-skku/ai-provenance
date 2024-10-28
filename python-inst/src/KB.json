@@ -30,5 +30,15 @@
     "output": {
         "ret0": "dataset"
     }
+},
+{
+    "method": "pseudonymize",
+    "action": "pseudonymize",
+    "input": {
+        "arg0": "dataset"
+    },
+    "output": {
+        "ret0": "dataset"
+    }
 }
 ]

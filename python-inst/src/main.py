@@ -29,6 +29,7 @@ def main():
     ]
     '''
     targets = ["../scenario/script1.py"]
+    # targets = ["../../ai-examples/facial_recog/detector.py"]
 
     '''
     if not os.path.exists("transformed"):
@@ -69,7 +70,7 @@ def main():
         import_as = import_analyzer.import_as
         from_import_all = import_analyzer.from_import_all
 
-        call_classifier = CallClassifier(import_as, from_import_all, "KB.json")
+        call_classifier = CallClassifier(import_as, from_import_all, basedir + "/KB.json")
         variable_tracker = VariableTracker()
 
         insert_policy = InsertPolicy(call_classifier)
