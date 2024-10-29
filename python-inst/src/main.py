@@ -5,14 +5,10 @@ import os
 
 from Analyzer import Analyzer
 from util import *
-from TaintAnalyzer import TaintAnalyzer
-# from ColumnTracker import ColumnTracker
+from TaintInstrument import TaintInstrument
 from ImportAnalyzer import ImportAnalyzer
 from CallClassifier import CallClassifier
 from VariableTracker import VariableTracker
-from InsertPolicy import InsertPolicy
-from Rule3 import Rule3
-from Rule4 import Rule4
 from Logger import Logger
 
 def main():
@@ -29,7 +25,7 @@ def main():
     ]
     '''
     # targets = ["../scenario/script1.py"]
-    targets = ["../../ai-examples/facial_recog/detector.py"]
+    # targets = ["../../ai-examples/facial_recog/detector.py"]
     targets = ["../../../privacy_demo/main.py"]
 
     '''
@@ -43,27 +39,6 @@ def main():
 
         print(target)
 
-        # os.chdir("../scenario")
-
-        # print(ast.dump(node, indent=" "))
-        # taint = TaintAnalyzer()
-        # taint.visit(node) # intended dup-visit
-
-        # print(GRN("======"))
-        # print(taint.tainted_node)
-        # print(GRN("======"))
-
-        # print(ast.dump(node, indent=2))
-
-        '''
-        analyzer = Analyzer()
-        transformed = analyzer.visit(node)
-        '''
-        # print(ast.dump(node, indent=2))
-        # ta = TaintAnalyzer()
-        # after_ta = ta.visit(node)
-        # print(ast.dump(after_ta, indent=2))
-
         curnode = node
 
         import_analyzer = ImportAnalyzer()
@@ -74,20 +49,13 @@ def main():
         call_classifier = CallClassifier(import_as, from_import_all, basedir + "/KB.json")
         variable_tracker = VariableTracker()
 
-        # insert_policy = InsertPolicy(call_classifier)
-        # curnode = insert_policy.visit(curnode)
-
         logger = Logger(call_classifier, variable_tracker)
         curnode = logger.visit(curnode)
 
-        print(logger.vt.typemap)
+        tainter = TaintInstrument()
+        curnode = tainter.visit(curnode)
 
-        '''
-        rule3 = Rule3(call_classifier)
-        curnode = rule3.visit(curnode)
-        rule4 = Rule4(call_classifier)
-        curnode = rule4.visit(curnode)
-        '''
+        # print(logger.vt.typemap)
 
         curnode = ast.fix_missing_locations(curnode)
 
@@ -95,10 +63,11 @@ def main():
 
         # os.chdir(basedir)
 
-        # with open("./transformed/transformed_" + filename, "w") as dst:
-        # with open("../scenario/transformed_" + filename, "w") as dst:
-        with open("../../../privacy_demo/transformed_" + filename, "w") as dst:
+        with open("transformed_" + filename, "w") as dst:
             dst.write(ast.unparse(curnode))
+
+        # with open("../../../privacy_demo/transformed_" + filename, "w") as dst:
+        #     dst.write(ast.unparse(curnode))
         # print(ast.dump(curnode, indent=2))
 
 if __name__ == "__main__":

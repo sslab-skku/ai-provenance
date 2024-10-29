@@ -56,6 +56,8 @@ class Script:
         self.edges = []
         self.var_last_appear = dict()
 
+        self.stmts = set()
+
         self.databases = dict()
         self.models = dict()
 
@@ -96,40 +98,22 @@ class Script:
         return modelid
 
     def insert_dataflow(self, lineno, action, dataflow):
-        newnode = self.new_node(f"line {lineno}: {action}")
+        if (lineno, action, dataflow) in self.stmts:
+            return
+        self.stmts.add((lineno, action, dataflow))
 
-        if "read" in action:
-            lhs = dataflow.split(":")[0]
-            dbname = action.split("(")[1].split(")")[0]
-            dbname = dbname.replace("'", "")
+        lhs, rhs = dataflow.split(" <- ", maxsplit=1)
+        # lhs <- rhs
 
-            dbnode = self.new_db(dbname)
+        newnode = self.new_node(f"{lhs}")
+        if rhs not in self.var_last_appear:
+            # rhs must be const, just make lhs out of nowhere without edge
             self.var_last_appear[lhs] = newnode
-
-            self.edges.append(f"{dbnode}--->{newnode}")
-        elif "train" in action:
-            lhs, rhs = dataflow.split(" <- ", maxsplit=1)
-
-            rhss = rhs.split(", ")
-            self.var_last_appear[lhs] = newnode
-            for rhs in rhss:
-                rhs_appear = self.var_last_appear[rhs]
-
-                self.edges.append(f"{rhs_appear}--\"{rhs}\"-->{newnode}")
-
-            modelname = lhs
-            modelnode = self.new_model(modelname)
-            self.var_last_appear[lhs] = modelnode
-
-            self.edges.append(f"{newnode}--->{modelnode}")
         else:
-            lhs, rhs = dataflow.split(" <- ", maxsplit=1)
-            # lhs <- rhs
-
             rhs_appear = self.var_last_appear[rhs]
             self.var_last_appear[lhs] = newnode
 
-            self.edges.append(f"{rhs_appear}--\"{lhs}\"-->{newnode}")
+            self.edges.append(f"{rhs_appear}--->{newnode}")
 
 def main():
     logfile = "logfile"
