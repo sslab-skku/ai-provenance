@@ -100,6 +100,13 @@ class Script:
     def insert_dataflow(self, lineno, action, dataflow):
         if (lineno, action, dataflow) in self.stmts:
             return
+
+        if "loop_" in action:
+            return
+
+        if "fn_" in action:
+            return
+
         self.stmts.add((lineno, action, dataflow))
 
         lhs, rhs = dataflow.split(" <- ", maxsplit=1)

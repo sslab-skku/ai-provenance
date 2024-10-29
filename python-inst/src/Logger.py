@@ -6,7 +6,8 @@ import os
 import csv
 
 def create_log(dbfile, lineno, tx, desc):
-    log_code = f"logger.log({dbfile},{lineno},{tx},{desc})"
+    # log_code = f"logger.log({dbfile},{lineno},{tx},{desc})"
+    log_code = f"ProvenanceLogger.log({dbfile},{lineno},{tx},{desc})"
     log_node = ast.parse(log_code).body[0]
     return log_node
 
@@ -30,14 +31,14 @@ class Logger(ast.NodeTransformer):
             # f"import time\n"
             f"from time import ctime\n"
             f"class ProvenanceLogger:\n"
-            f"    def __init__(self, filename):\n"
-            f"        self.logfile = open(filename, \'a\')\n"
-            f"    def log(self, dbfile, lineno, tx, desc):\n"
-            # f"        curtime = time.ctime()\n"
-             f"        curtime = ctime()\n"
-            f"        self.logfile.write(f'{{curtime}},{{__file__}},{{dbfile}},{{lineno}},{{tx}},\"{{desc}}\"\\n')"
+            f"    @staticmethod\n"
+            f"    def log(dbfile, lineno, tx, desc):\n"
+            f"        logfile = open(\"logfile\", \'a\')\n"
+            f"        curtime = ctime()\n"
+            f"        logfile.write(f'{{curtime}},{{__file__}},{{dbfile}},{{lineno}},{{tx}},\"{{desc}}\"\\n')\n"
+            f"        logfile.close()\n"
             f"\n"
-            f"logger = ProvenanceLogger(\"logfile\")\n"
+            # f"logger = ProvenanceLogger(\"logfile\")\n"
         )
         insert_node = ast.parse(insert_code).body
         node.body = insert_node + node.body

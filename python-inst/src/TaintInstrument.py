@@ -33,7 +33,12 @@ class TaintInstrument(ast.NodeTransformer):
 
         if isinstance(rhs, ast.Call):
             # rhs is call, handle it carefully
-            pass
+            rhs_name = expr_to_string(rhs)
+            args = extract_args_from_call(rhs)
+
+            combinations = [[l, r] for l in lhs_names for r in args]
+            for combination in combinations:
+                result.append(create_log("\"-\"", node.lineno, f"\"call: {rhs_name}\"", f"\"{combination[0]} <- {combination[1]}\""))
             return result
         else:
             rhs_names = []
@@ -49,7 +54,6 @@ class TaintInstrument(ast.NodeTransformer):
             combinations = [[l, r] for l in lhs_names for r in rhs_names]
             for combination in combinations:
                 result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{combination[0]} <- {combination[1]}\""))
-            print(combinations)
 
         # print(lhs_names)
         # print(rhs_names)
@@ -71,7 +75,11 @@ class TaintInstrument(ast.NodeTransformer):
 
         if isinstance(rhs, ast.Call):
             # rhs is call, handle it carefully
-            pass
+            rhs_name = expr_to_string(rhs)
+            args = extract_args_from_call(rhs)
+
+            for arg in args:
+                result.append(create_log("\"-\"", node.lineno, f"\"call: {rhs_name}\"", f"\"{lhs_name} <- {arg}\""))
             return result
         else:
             rhs_names = []
@@ -89,6 +97,9 @@ class TaintInstrument(ast.NodeTransformer):
         return node
 
     def visit_FunctionDef(self, node):
+        # visit children first
+        self.generic_visit(node)
+
         prologue = create_log("\"-\"", node.lineno, "\"fn_start\"", f"\"{node.name}\"")
         epilogue = create_log("\"-\"", node.lineno, "\"fn_end\"", f"\"{node.name}\"")
 
@@ -96,6 +107,25 @@ class TaintInstrument(ast.NodeTransformer):
         insert_epilogue_here = []
         for i, stmt in enumerate(node.body):
             if isinstance(stmt, ast.Return):
+                insert_epilogue_here.append(i)
+        for i in reversed(insert_epilogue_here):
+            node.body.insert(i, epilogue)
+
+        node.body.append(epilogue)
+
+        return node
+
+    def visit_For(self, node):
+        # visit children first
+        self.generic_visit(node)
+
+        prologue = create_log("\"-\"", node.lineno, "\"loop_start\"", "\"\"")
+        epilogue = create_log("\"-\"", node.lineno, "\"loop_end\"", "\"\"")
+
+        node.body.insert(0, prologue)
+        insert_epilogue_here = []
+        for i, stmt in enumerate(node.body):
+            if isinstance(stmt, ast.Break):
                 insert_epilogue_here.append(i)
         for i in reversed(insert_epilogue_here):
             node.body.insert(i, epilogue)

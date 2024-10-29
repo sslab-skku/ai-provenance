@@ -18,6 +18,8 @@ def expr_to_string(node):
             return f"{node.lower}:{node.upper}"
     elif isinstance(node, ast.UnaryOp):
         return expr_to_string(node.operand)
+    elif isinstance(node, ast.Call):
+        return expr_to_string(node.func) + "()"
     else:
         print(RED("NOO"))
         print(ast.dump(node))
@@ -66,3 +68,14 @@ def flatten_binop(node):
         return [node.left, node.right]
     else:
         return [node]
+
+def extract_args_from_call(node):
+    assert isinstance(node, ast.Call), RED("extract_args_from_call: node is not ast.Call")
+
+    result = []
+    for arg in node.args:
+        if isinstance(arg, ast.Call):
+            result.extend(extract_args_from_call(arg))
+        else:
+            result.append(expr_to_string(arg))
+    return result

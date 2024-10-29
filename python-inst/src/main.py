@@ -49,11 +49,11 @@ def main():
         call_classifier = CallClassifier(import_as, from_import_all, basedir + "/KB.json")
         variable_tracker = VariableTracker()
 
-        logger = Logger(call_classifier, variable_tracker)
-        curnode = logger.visit(curnode)
-
         tainter = TaintInstrument()
         curnode = tainter.visit(curnode)
+
+        logger = Logger(call_classifier, variable_tracker)
+        curnode = logger.visit(curnode)
 
         # print(logger.vt.typemap)
 
