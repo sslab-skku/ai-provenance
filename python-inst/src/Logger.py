@@ -1,7 +1,5 @@
 import ast
 from util import *
-from CallClassifier import CallClassifier 
-from VariableTracker import VariableTracker
 import os
 import csv
 
@@ -20,11 +18,8 @@ def get_id_or_value(node):
     return ret
 
 class Logger(ast.NodeTransformer):
-    def __init__(self, call_classifier, variable_tracker):
-        self.call_classifier = call_classifier
-        self.cc = self.call_classifier
-        self.variable_tracker = variable_tracker
-        self.vt = self.variable_tracker
+    def __init__(self):
+        pass
 
     def visit_Module(self, node):
         insert_code = (

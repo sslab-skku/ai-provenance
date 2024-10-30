@@ -7,9 +7,8 @@ from Analyzer import Analyzer
 from util import *
 from TaintInstrument import TaintInstrument
 from MyVisitor import MyVisitor
+from InternalFunctions import InternalFunctions
 from ImportAnalyzer import ImportAnalyzer
-from CallClassifier import CallClassifier
-from VariableTracker import VariableTracker
 from Logger import Logger
 
 def main():
@@ -47,15 +46,22 @@ def main():
         import_as = import_analyzer.import_as
         from_import_all = import_analyzer.from_import_all
 
-        call_classifier = CallClassifier(import_as, from_import_all, basedir + "/KB.json")
-        variable_tracker = VariableTracker()
+        # call_classifier = CallClassifier(import_as, from_import_all, basedir + "/KB.json")
+        # variable_tracker = VariableTracker()
 
         visitor = MyVisitor()
 
-        tainter = TaintInstrument(visitor)
+        _internal = InternalFunctions()
+        _internal.visit(curnode)
+        int_funcs = _internal.int_funcs
+        
+        print(int_funcs)
+
+        tainter = TaintInstrument(visitor, int_funcs)
         curnode = tainter.visit(curnode)
 
-        logger = Logger(call_classifier, variable_tracker)
+        # logger = Logger(call_classifier, variable_tracker)
+        logger = Logger()
         curnode = logger.visit(curnode)
 
         # print(logger.vt.typemap)

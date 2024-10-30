@@ -122,18 +122,37 @@ class Script:
 
             self.edges.append(f"{rhs_appear}--->{newnode}")
 
+    def insert_retedge(self, callee, caller):
+        lineno = caller[3]
+
+        callee = eval(callee[5])
+        caller = eval(caller[5].split("to ")[1])
+
+        for (lhs, rhss) in zip(caller, callee):
+            for rhs in rhss:
+                self.insert_dataflow(lineno, "return", f"{lhs} <- {rhs}")
+
 def main():
     logfile = "logfile"
     graph = Graph()
 
     with open(logfile, "r") as f_log:
         csvreader = csv.reader(f_log)
-        for line in csvreader:
+        prevline = ""
+        for (i, line) in enumerate(csvreader):
             (time, script, dbfile, lineno, action, dataflow) = line
 
+            # for id()
             dataflow = dataflow.split(" ::")[0]
 
             script = graph.get_script(script)
+
+            if "fn_return" in action and dataflow != "":
+                prevline = line
+                continue
+            if "callret" in action:
+                script.insert_retedge(prevline, line)
+                continue
 
             script.insert_dataflow(lineno, action, dataflow)
 

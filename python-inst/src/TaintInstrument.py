@@ -34,26 +34,22 @@ def log_flatten(node, code, lineno):
 
 
 class TaintInstrument(ast.NodeTransformer):
-    def __init__(self, visitor):
+    def __init__(self, visitor, int_funcs):
         self.visitor = visitor
+        self.int_funcs = int_funcs # set of internal function names
 
     '''
     def generic_visit(self, node):
         return node
     '''
 
-    def visit_Assign(self, node):
-        # ast.Assign(targets, value, type_comment)
-        # targets is a list of nodes
-        # value is a single node
+    def assign_family(self, node, lhss, rhs):
+        # result = [node]
+        result = []
 
-        result = [node]
-
-        lhss = node.targets
-        rhs = node.value
-
-        print("==========")
         rhsnodes = self.visitor.visit(rhs)
+
+        flag_internal_fn = False
         for lhs in lhss:
             lhsnodes = self.visitor.visit(lhs)
             print(f"{node.lineno}: {lhsnodes}")
@@ -74,12 +70,23 @@ class TaintInstrument(ast.NodeTransformer):
 
             # connect lhs <- rhs
             if isinstance(rhs, ast.Call):
-                fnname = expr_to_string(rhs)
+                fnname = expr_to_string(rhs)[:-2]
 
-                combinations = [[l, r] for l in lhs_flat for r in rhs_flat]
-                for combination in combinations:
-                    # result.append(create_log("\"-\"", node.lineno, f"\"call: {fnname}\"", f"\"{combination[0]} <- {combination[1]}" + " :: \" + " + "f\"{id(" + f"{combination[0]}" + ")}\""))
-                    result.append(create_log("\"-\"", node.lineno, f"\"call: {fnname}\"", f"\"{combination[0]} <- {combination[1]}\""))
+                for func in self.int_funcs:
+                    if func.name != fnname:
+                        continue
+
+                    # now func is what we're searching for
+                    for (arg, param) in zip(rhs.args, func.node.args.args):
+                        result.append(create_log("\"-\"", node.lineno, f"\"callarg: {fnname}\"", f"\"{param.arg} <- {expr_to_string(arg)}\""))
+                        flag_internal_fn = True
+                    break
+                else:
+                    # func is external fn
+                    combinations = [[l, r] for l in lhs_flat for r in rhs_flat]
+                    for combination in combinations:
+                        # result.append(create_log("\"-\"", node.lineno, f"\"call: {fnname}\"", f"\"{combination[0]} <- {combination[1]}" + " :: \" + " + "f\"{id(" + f"{combination[0]}" + ")}\""))
+                        result.append(create_log("\"-\"", node.lineno, f"\"extcall: {fnname}\"", f"\"{combination[0]} <- {combination[1]}\""))
             else:
                 if len(lhs_flat) == len(rhs_flat) and hasattr(rhs, "elts"):
                     # HACK: this is likely to be (a, b, c) = (1, 2, 3)
@@ -91,91 +98,38 @@ class TaintInstrument(ast.NodeTransformer):
                     for combination in combinations:
                         # result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{combination[0]} <- {combination[1]}" + " :: \" + " + "f\"{id(" + f"{combination[0]}" + ")}\""))
                         result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{combination[0]} <- {combination[1]}\""))
-                
+
+        result.append(node)
+        if flag_internal_fn:
+            for lhs in lhss:
+                lhsnodes = self.visitor.visit(lhs)
+
+                lhs_flat = log_flatten(lhsnodes, [], node.lineno)
+
+                if not isinstance(lhs_flat, list):
+                    lhs_flat = [lhs_flat]
+
+                result.append(create_log("\"-\"", node.lineno, f"\"callret: {fnname}\"", f"\"return to {lhs_flat}\""))
         return result
 
-        lhs_names = []
-        for lhs_element in lhss:
-            flattened = flatten(lhs_element)
-            for flat in flattened:
-                lhs_names.append(expr_to_string(flat))
-        lhs_names = list(map(lambda name: name.split(".")[0], lhs_names))
+    def visit_Assign(self, node):
+        # ast.Assign(targets, value, type_comment)
+        # targets is a list of nodes
+        # value is a single node
 
-        if isinstance(rhs, ast.Call):
-            # rhs is call, handle it carefully
-            rhs_name = expr_to_string(rhs)
-            args = extract_args_from_call(rhs)
+        lhss = node.targets
+        rhs = node.value
 
-            combinations = [[l, r] for l in lhs_names for r in args]
-            for combination in combinations:
-                # result.append(create_log("\"-\"", node.lineno, f"\"call: {rhs_name}\"", f"\"{combination[0]} <- {combination[1]}" + " :: \" + " + "f\"{id(" + f"{combination[0]}" + ")} <- {id(" + f"{combination[1]}" + ")}\""))
-                # result.append(create_log("\"-\"", node.lineno, f"\"call: {rhs_name}\"", f"\"{combination[0]} <- {combination[1]}" + " :: \" + " + "f\"{id(" + f"{combination[0]}" + ")}\""))
-                result.append(create_log("\"-\"", node.lineno, f"\"call: {rhs_name}\"", f"\"{combination[0]} <- {combination[1]}\""))
-            # result.append(node)
-            return result
-        else:
-            rhs_names = []
-            flattened = flatten(rhs)
-            for flat in flattened:
-                rhs_names.append(expr_to_string(flat))
-            rhs_names = list(map(lambda name: name.split(".")[0], rhs_names))
-
-        if len(lhs_names) == len(rhs_names) and hasattr(rhs, "elts"):
-            # HACK: this is likely to be (a, b, c) = (1, 2, 3)
-            for pair in zip(lhs_names, rhs_names):
-                # result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{pair[0]} <- {pair[1]}" + " :: \" + " + "f\"{id(" + f"{pair[0]}" + ")} <- {id(" + f"{pair[1]}" + ")}\""))
-                # result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{pair[0]} <- {pair[1]}" + " :: \" + " + "f\"{id(" + f"{pair[0]}" + ")}\""))
-                result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{pair[0]} <- {pair[1]}\""))
-        else:
-            combinations = [[l, r] for l in lhs_names for r in rhs_names]
-            for combination in combinations:
-                # result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{combination[0]} <- {combination[1]}" + " :: \" + " + "f\"{id(" + f"{combination[0]}" + ")} <- {id(" + f"{combination[1]}" + ")}\""))
-                # result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{combination[0]} <- {combination[1]}" + " :: \" + " + "f\"{id(" + f"{combination[0]}" + ")}\""))
-                result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{combination[0]} <- {combination[1]}\""))
-
-        # result.append(node)
-        return result
+        return self.assign_family(node, lhss, rhs)
 
     def visit_AugAssign(self, node):
         # ast.AugAssign(target, op, value)
         # e.g., a += 3
 
-        result = [node]
-
-        lhs = node.target
+        lhss = [node.target]
         rhs = node.value
 
-        # no need to flatten
-        lhs_name = expr_to_string(lhs)
-
-        if isinstance(rhs, ast.Call):
-            # rhs is call, handle it carefully
-            rhs_name = expr_to_string(rhs)
-            args = extract_args_from_call(rhs)
-
-            for arg in args:
-                # result.append(create_log("\"-\"", node.lineno, f"\"call: {rhs_name}\"", f"\"{lhs_name} <- {arg}" + " :: \" + " + "f\"{id(" + f"{lhs_name}" + ")} <- {id(" + f"{arg}" + ")}\""))
-                # result.append(create_log("\"-\"", node.lineno, f"\"call: {rhs_name}\"", f"\"{lhs_name} <- {arg}" + " :: \" + " + "f\"{id(" + f"{lhs_name}" + ")}\""))
-                result.append(create_log("\"-\"", node.lineno, f"\"call: {rhs_name}\"", f"\"{lhs_name} <- {arg}\""))
-            # result.append(node)
-            return result
-        else:
-            rhs_names = []
-            flattened = flatten(rhs)
-            for flat in flattened:
-                rhs_names.append(expr_to_string(flat))
-            rhs_names = list(map(lambda name: name.split(".")[0], rhs_names))
-
-            # result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{lhs_name} <- {lhs_name}" + " :: \" + " + "f\"{id(" + f"{lhs_name}" + ")} <- {id(" + f"{lhs_name}" + ")}\""))
-            # result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{lhs_name} <- {lhs_name}" + " :: \" + " + "f\"{id(" + f"{lhs_name}" + ")}\""))
-            result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{lhs_name} <- {lhs_name}\""))
-            for rhs_name in rhs_names:
-                # result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{lhs_name} <- {rhs_name}" + " :: \" + " + "f\"{id(" + f"{lhs_name}" + ")} <- {id(" + f"{rhs_name}" + ")}\""))
-                # result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{lhs_name} <- {rhs_name}" + " :: \" + " + "f\"{id(" + f"{lhs_name}" + ")}\""))
-                result.append(create_log("\"-\"", node.lineno, "\"assign\"", f"\"{lhs_name} <- {rhs_name}\""))
-
-        # result.append(node)
-        return result
+        return self.assign_family(node, lhss, rhs)
 
     def visit_Call(self, node):
         return node
@@ -185,17 +139,26 @@ class TaintInstrument(ast.NodeTransformer):
         self.generic_visit(node)
 
         prologue = create_log("\"-\"", node.lineno, "\"fn_start\"", f"\"{node.name}\"")
-        epilogue = create_log("\"-\"", node.lineno, "\"fn_end\"", f"\"{node.name}\"")
+        epilogue = create_log("\"-\"", node.lineno, "\"fn_return\"", f"\"{node.name}\"")
 
         node.body.insert(0, prologue)
         insert_epilogue_here = []
         for i, stmt in enumerate(node.body):
             if isinstance(stmt, ast.Return):
-                insert_epilogue_here.append(i)
-        for i in reversed(insert_epilogue_here):
-            node.body.insert(i, epilogue)
+                insert_epilogue_here.append((i, stmt.value))
+        for (i, retval) in reversed(insert_epilogue_here):
+            if isinstance(retval, ast.Tuple):
+                retvec = flatten_elts(retval)
+            else:
+                retvec = [retval]
 
-        node.body.append(epilogue)
+            ret = []
+            for flat in retvec:
+                ret.append(list(map(lambda fl: expr_to_string(fl), flatten(flat))))
+            print(YEL(f"{ret}"))
+            node.body.insert(i, create_log("\"-\"", node.lineno, f"\"fn_return({node.name})\"", f"\"{ret}\""))
+
+        node.body.append(create_log("\"-\"", node.lineno, f"\"fn_return({node.name})\"", "\"\""))
 
         return node
 
