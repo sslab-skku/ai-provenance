@@ -55,7 +55,7 @@ def main():
         _internal.visit(curnode)
         int_funcs = _internal.int_funcs
 
-        tainter = TaintInstrument(visitor, int_funcs)
+        tainter = TaintInstrument(visitor, int_funcs, import_as)
         curnode = tainter.visit(curnode)
 
         # logger = Logger(call_classifier, variable_tracker)

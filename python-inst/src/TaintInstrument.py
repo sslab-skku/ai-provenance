@@ -34,9 +34,10 @@ def log_flatten(node, code, lineno):
 
 
 class TaintInstrument(ast.NodeTransformer):
-    def __init__(self, visitor, int_funcs):
+    def __init__(self, visitor, int_funcs, import_as):
         self.visitor = visitor
         self.int_funcs = int_funcs # set of internal function names
+        self.import_as = import_as
         self.scope = "__main__"
 
     '''
@@ -53,8 +54,8 @@ class TaintInstrument(ast.NodeTransformer):
         flag_internal_fn = False
         for lhs in lhss:
             lhsnodes = self.visitor.visit(lhs)
-            print(f"{node.lineno}: {lhsnodes}")
-            print(f"{node.lineno}: {rhsnodes}")
+            # print(f"{node.lineno}: {lhsnodes}")
+            # print(f"{node.lineno}: {rhsnodes}")
 
             # connect internals first
             code = []
@@ -73,7 +74,7 @@ class TaintInstrument(ast.NodeTransformer):
             if isinstance(rhs, ast.Call):
                 fnname = expr_to_string(rhs)[:-2]
 
-                print(fnname)
+                # print(fnname)
                 for func in self.int_funcs:
                     if func.name != fnname:
                         continue
@@ -168,6 +169,22 @@ class TaintInstrument(ast.NodeTransformer):
         return self.assign_family(node, lhss, rhs)
 
     def visit_Call(self, node):
+        # ast.Call(func, args, keywords)
+        # all call here must be from Expr
+
+        return node
+
+        fnname = expr_to_string(node)[:-2]
+        selfornot = fnname.split(".")[0]
+        if selfornot in self.import_as:
+            return node
+        if "." not in fnname:
+            return node
+
+        # self <- args
+        aself = selfornot
+        args = node.args
+
         return node
 
     def visit_FunctionDef(self, node):
@@ -212,20 +229,32 @@ class TaintInstrument(ast.NodeTransformer):
         prologue = create_log("\"-\"", node.lineno, "\"loop_start\"", "\"\"")
         epilogue = create_log("\"-\"", node.lineno, "\"loop_end\"", "\"\"")
 
-        '''
-        node.body.insert(0, prologue)
-        insert_epilogue_here = []
-        for i, stmt in enumerate(node.body):
-            if isinstance(stmt, ast.Break):
-                insert_epilogue_here.append(i)
-        for i in reversed(insert_epilogue_here):
-            node.body.insert(i, epilogue)
+        # create_log("\"-\"", node.lineno, "\"\"", "\"\"")
 
-        node.body.append(epilogue)
-        '''
+        # target <- iter
+        code = []
+        lhsnodes = self.visitor.visit(node.target)
+        rhsnodes = self.visitor.visit(node.iter)
+        lhs_flat = log_flatten(lhsnodes, code, node.lineno)
+        rhs_flat = log_flatten(rhsnodes, code, node.lineno)
 
-        return [prologue, node, epilogue]
+        if not isinstance(lhs_flat, list):
+            lhs_flat = [lhs_flat]
+        if not isinstance(rhs_flat, list):
+            rhs_flat = [rhs_flat]
+
+        result = []
+        if len(lhs_flat) == len(rhs_flat) and hasattr(node.iter, "elts"):
+            # HACK: this is likely to be for (a, b) in (AA, BB)
+            for pair in zip(lhs_flat, rhs_flat):
+                result.append(create_log("\"-\"", node.lineno, "\"iter\"", f"\"{pair[0]} <- {pair[1]}\""))
+        else:
+            combinations = [[l, r] for l in lhs_flat for r in rhs_flat]
+            for combination in combinations:
+                result.append(create_log("\"-\"", node.lineno, "\"iter\"", f"\"{combination[0]} <- {combination[1]}\""))
+
+        return [prologue, code, node] + result + [epilogue]
 
     def visit_Subscript(self, node):
-        print(ast.dump(node))
+        # print(ast.dump(node))
         return node

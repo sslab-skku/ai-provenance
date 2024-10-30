@@ -38,13 +38,30 @@ class Graph:
         for script in self.scripts.values():
             graph += f"subgraph sc{script.scriptid} [\"{script.name}\"]\n"
             for (nodename, node) in script.nodes.items():
-                graph += "    " + nodename + "(\"" + node + "\")\n"
-            for edge in script.edges:
+                if script.tags.get(nodename) != None:
+                    graph += "    " + nodename + "(\"" + node + "\")\n"
+
+            sensitive_edges = []
+            skipped = 0
+            for (i, edge) in enumerate(script.edges):
                 lhs = edge.split("--")[0]
                 rhs = edge.split("-->")[1]
-                if lhs not in script.databases.values() \
-                    and rhs not in script.models.values():
-                    graph += "    " + edge + "\n"
+                if script.tags.get(lhs) == None or script.tags.get(rhs) == None:
+                    skipped += 1
+                    continue
+
+                if script.tags.get(lhs) == "UNLEARN":
+                    sensitive_edges.append(i - skipped)
+
+                if lhs in script.databases.values() \
+                    or rhs in script.models.values():
+                    continue
+
+                graph += "    " + edge + "\n"
+            
+            for sensitive in sensitive_edges:
+                graph += f"    linkStyle {sensitive} stroke:red, stroke-width:2px\n"
+
             graph += "end\n"
 
         print(graph)
@@ -61,6 +78,8 @@ class Script:
         self.var_last_appear = dict()
 
         self.stmts = set()
+
+        self.tags = dict()
 
         self.databases = dict()
         self.models = dict()
@@ -142,7 +161,6 @@ class Script:
 
     def dataflow(self, lineno, action, lhs, rhs):
         # lhs <- rhs
-        #
 
         if "(const)" in rhs:
             return
@@ -158,20 +176,28 @@ class Script:
             paths = ast.literal_eval(rhs)
             if isinstance(paths, list):
                 for p in paths:
+                    '''
                     if not self.var_last_appear.get(p):
-                        newnode_path = self.new_node(f"{p}")
+                        newnode_path = self.new_db(f"{p}")
                         self.var_last_appear[p] = newnode_path
                     else:
                         newnode_path = self.var_last_appear[p]
+                    '''
+                    newnode_path = self.new_db(f"{p}")
+                    self.var_last_appear[p] = newnode_path
 
                     self.edges.append(f"{newnode_path}--->{newnode}")
             else:
                 p = paths
+                '''
                 if not self.var_last_appear.get(p):
-                    newnode_path = self.new_node(f"{p}")
+                    newnode_path = self.new_db(f"{p}")
                     self.var_last_appear[p] = newnode_path
                 else:
                     newnode_path = self.var_last_appear[p]
+                '''
+                newnode_path = self.new_db(f"{p}")
+                self.var_last_appear[p] = newnode_path
                 self.edges.append(f"{newnode_path}--->{newnode}")
         else:
             if rhs not in self.var_last_appear:
@@ -182,6 +208,51 @@ class Script:
                 self.var_last_appear[lhs] = newnode
 
                 self.edges.append(f"{rhs_appear}--{lineno}-->{newnode}")
+
+    def taint(self):
+        for database in self.databases.values():
+            self.tags[database] = "DATABASE"
+
+        # SCENARIO: Won_bin is now private and needs to be unlearned
+        self.tags[self.databases["Won_bin"]] = "UNLEARN"
+
+        changed = True
+        while changed:
+            changed = False
+            for edge in self.edges:
+                lhs = edge.split("--")[0]
+                rhs = edge.split("-->")[1]
+                if self.tags.get(lhs) == "DATABASE" \
+                    and (self.tags.get(rhs) != "DATABASE" and self.tags.get(rhs) != "UNLEARN"):
+                    changed = True
+                    self.tags[rhs] = "DATABASE"
+                if self.tags.get(lhs) == "UNLEARN" \
+                    and self.tags.get(rhs) != "UNLEARN":
+                    changed = True
+                    self.tags[rhs] = "UNLEARN"
+
+    def sort_edges(self):
+        result = []
+
+        for edge in self.edges:
+            lhs = edge.split("--")[0]
+            rhs = edge.split("-->")[1]
+            if lhs in self.databases.values():
+                result.append(edge)
+
+        for edge in self.edges:
+            lhs = edge.split("--")[0]
+            rhs = edge.split("-->")[1]
+            if lhs not in self.databases.values() and rhs in self.models.values():
+                result.append(edge)
+
+        for edge in self.edges:
+            lhs = edge.split("--")[0]
+            rhs = edge.split("-->")[1]
+            if lhs not in self.databases.values() and rhs not in self.models.values():
+                result.append(edge)
+
+        self.edges = result
 
 def main():
     logfile = "logfile"
@@ -206,6 +277,10 @@ def main():
                 continue
 
             script.insert_dataflow(scope, lineno, action, dataflow)
+
+    for script in graph.scripts:
+        graph.get_script(script).taint()
+        graph.get_script(script).sort_edges()
 
     graph.visualize()
 
