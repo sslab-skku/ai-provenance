@@ -54,8 +54,6 @@ def main():
         _internal = InternalFunctions()
         _internal.visit(curnode)
         int_funcs = _internal.int_funcs
-        
-        print(int_funcs)
 
         tainter = TaintInstrument(visitor, int_funcs)
         curnode = tainter.visit(curnode)

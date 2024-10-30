@@ -74,6 +74,10 @@ class Script:
         pass
 
     def new_node(self, action):
+        for (k, v) in self.nodes.items():
+            if v == action:
+                return k
+
         nodename = f"SC{self.scriptid}N{len(self.nodes)+1}"
         self.nodes[nodename] = action
 
@@ -101,7 +105,7 @@ class Script:
 
         return modelid
 
-    def insert_dataflow(self, lineno, action, dataflow):
+    def insert_dataflow(self, scope, lineno, action, dataflow):
         if (lineno, action, dataflow) in self.stmts:
             return
 
@@ -113,16 +117,42 @@ class Script:
 
         self.stmts.add((lineno, action, dataflow))
 
-        print(dataflow, "\t", action)
+        # print(dataflow, "\t", action)
         lhs, rhs = dataflow.split(" <- ", maxsplit=1)
+
+        if "callarg" in action:
+            # diff scope
+            callee = action.split(": ")[1]
+            self.dataflow(lineno, action, f"{lhs} ({callee})", f"{rhs} ({scope})")
+        else:
+            self.dataflow(lineno, action, f"{lhs} ({scope})", f"{rhs} ({scope})")
+
+    def insert_retedge(self, callee, caller):
+        lineno = caller[4]
+
+        calleescope = callee[3]
+        callerscope = caller[3]
+
+        callee = eval(callee[6])
+        caller = eval(caller[6].split("to ")[1])
+
+        for (lhs, rhss) in zip(caller, callee):
+            for rhs in rhss:
+                self.dataflow(lineno, "return", f"{lhs} ({callerscope})", f"{rhs} ({calleescope})")
+
+    def dataflow(self, lineno, action, lhs, rhs):
         # lhs <- rhs
         #
+
+        if "(const)" in rhs:
+            return
 
         newnode = self.new_node(f"{lhs}")
 
         if "path" in action and "extcall" not in action:
             import ast
             # Heuristic to detect list
+            rhs = rhs.split(" (")[0]
             if rhs[1] == "[" and rhs[-2]=="]":
                 rhs = rhs[1:-1]
             paths = ast.literal_eval(rhs)
@@ -143,25 +173,15 @@ class Script:
                 else:
                     newnode_path = self.var_last_appear[p]
                 self.edges.append(f"{newnode_path}--->{newnode}")
-
-        if rhs not in self.var_last_appear:
-            # rhs must be const, just make lhs out of nowhere without edge
-            self.var_last_appear[lhs] = newnode
         else:
-            rhs_appear = self.var_last_appear[rhs]
-            self.var_last_appear[lhs] = newnode
+            if rhs not in self.var_last_appear:
+                # rhs must be const, just make lhs out of nowhere without edge
+                self.var_last_appear[lhs] = newnode
+            else:
+                rhs_appear = self.var_last_appear[rhs]
+                self.var_last_appear[lhs] = newnode
 
-            self.edges.append(f"{rhs_appear}--->{newnode}")
-
-    def insert_retedge(self, callee, caller):
-        lineno = caller[3]
-
-        callee = eval(callee[5])
-        caller = eval(caller[5].split("to ")[1])
-
-        for (lhs, rhss) in zip(caller, callee):
-            for rhs in rhss:
-                self.insert_dataflow(lineno, "return", f"{lhs} <- {rhs}")
+                self.edges.append(f"{rhs_appear}--{lineno}-->{newnode}")
 
 def main():
     logfile = "logfile"
@@ -171,7 +191,7 @@ def main():
         csvreader = csv.reader(f_log)
         prevline = ""
         for (i, line) in enumerate(csvreader):
-            (time, script, dbfile, lineno, action, dataflow) = line
+            (time, script, dbfile, scope, lineno, action, dataflow) = line
 
             # for id()
             dataflow = dataflow.split(" ::")[0]
@@ -185,7 +205,7 @@ def main():
                 script.insert_retedge(prevline, line)
                 continue
 
-            script.insert_dataflow(lineno, action, dataflow)
+            script.insert_dataflow(scope, lineno, action, dataflow)
 
     graph.visualize()
 

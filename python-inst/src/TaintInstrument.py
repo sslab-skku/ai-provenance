@@ -37,6 +37,7 @@ class TaintInstrument(ast.NodeTransformer):
     def __init__(self, visitor, int_funcs):
         self.visitor = visitor
         self.int_funcs = int_funcs # set of internal function names
+        self.scope = "__main__"
 
     '''
     def generic_visit(self, node):
@@ -105,7 +106,8 @@ class TaintInstrument(ast.NodeTransformer):
                                         '"-"',
                                         node.lineno,
                                         f'"path"',
-                                        f"\"{combination[0]} <- '\" + str(os.listdir(os.path.join({new_rhs_flat[0]}, \"{new_rhs_flat[1].replace(" (const)","")}\")))  + \"'\" ",
+                                        # f"\"{combination[0]} <- '\" + str(os.listdir(os.path.join({new_rhs_flat[0]}, \"{new_rhs_flat[1].replace(" (const)","")}\")))  + \"'\" ",
+                                        f'"{combination[0]} <- \'" + str(os.listdir(os.path.join({new_rhs_flat[0]}, "{new_rhs_flat[1].replace(" (const)","")}")))  + "\'" ',
                                     )
                                 )
                             else:
@@ -175,7 +177,13 @@ class TaintInstrument(ast.NodeTransformer):
         prologue = create_log("\"-\"", node.lineno, "\"fn_start\"", f"\"{node.name}\"")
         epilogue = create_log("\"-\"", node.lineno, "\"fn_return\"", f"\"{node.name}\"")
 
+        callstack_push_code = f"ProvenanceLogger.callstack.append(\"{node.name}\")\n"
+        callstack_push_node = ast.parse(callstack_push_code).body[0]
+        callstack_pop_code = f"ProvenanceLogger.callstack.pop()\n"
+        callstack_pop_node = ast.parse(callstack_pop_code).body[0]
+
         node.body.insert(0, prologue)
+        node.body.insert(0, callstack_push_node)
         insert_epilogue_here = []
         for i, stmt in enumerate(node.body):
             if isinstance(stmt, ast.Return):
@@ -189,10 +197,11 @@ class TaintInstrument(ast.NodeTransformer):
             ret = []
             for flat in retvec:
                 ret.append(list(map(lambda fl: expr_to_string(fl), flatten(flat))))
-            print(YEL(f"{ret}"))
+            node.body.insert(i, callstack_pop_node)
             node.body.insert(i, create_log("\"-\"", node.lineno, f"\"fn_return({node.name})\"", f"\"{ret}\""))
 
         node.body.append(create_log("\"-\"", node.lineno, f"\"fn_return({node.name})\"", "\"\""))
+        node.body.append(callstack_pop_node)
 
         return node
 

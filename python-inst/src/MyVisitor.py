@@ -28,7 +28,10 @@ class MyVisitor(ast.NodeVisitor):
         rhs = node.value
 
     def visit_Call(self, node):
-        return list(map(self.visit, node.args))
+        result = []
+        result.extend(list(map(self.visit, node.args)))
+        result.extend(list(map(lambda kw: self.visit(kw.value), node.keywords)))
+        return result
 
     def visit_Attribute(self, node):
         # ast.Attribute(value, attr, ctx)
