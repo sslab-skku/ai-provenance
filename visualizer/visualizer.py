@@ -131,6 +131,8 @@ def main():
         for line in csvreader:
             (time, script, dbfile, lineno, action, dataflow) = line
 
+            dataflow = dataflow.split(" ::")[0]
+
             script = graph.get_script(script)
 
             script.insert_dataflow(lineno, action, dataflow)

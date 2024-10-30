@@ -6,6 +6,7 @@ import os
 from Analyzer import Analyzer
 from util import *
 from TaintInstrument import TaintInstrument
+from MyVisitor import MyVisitor
 from ImportAnalyzer import ImportAnalyzer
 from CallClassifier import CallClassifier
 from VariableTracker import VariableTracker
@@ -49,7 +50,9 @@ def main():
         call_classifier = CallClassifier(import_as, from_import_all, basedir + "/KB.json")
         variable_tracker = VariableTracker()
 
-        tainter = TaintInstrument()
+        visitor = MyVisitor()
+
+        tainter = TaintInstrument(visitor)
         curnode = tainter.visit(curnode)
 
         logger = Logger(call_classifier, variable_tracker)
