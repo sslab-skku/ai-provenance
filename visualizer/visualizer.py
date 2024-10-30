@@ -48,6 +48,10 @@ class Graph:
             graph += "end\n"
 
         print(graph)
+        with  open("graph.mmd", "w") as f:
+            f.write(graph)
+            f.close()
+
 
 class Script:
     def __init__(self, name, sid):
@@ -109,10 +113,37 @@ class Script:
 
         self.stmts.add((lineno, action, dataflow))
 
+        print(dataflow, "\t", action)
         lhs, rhs = dataflow.split(" <- ", maxsplit=1)
         # lhs <- rhs
+        #
 
         newnode = self.new_node(f"{lhs}")
+
+        if "path" in action and "extcall" not in action:
+            import ast
+            # Heuristic to detect list
+            if rhs[1] == "[" and rhs[-2]=="]":
+                rhs = rhs[1:-1]
+            paths = ast.literal_eval(rhs)
+            if isinstance(paths, list):
+                for p in paths:
+                    if not self.var_last_appear.get(p):
+                        newnode_path = self.new_node(f"{p}")
+                        self.var_last_appear[p] = newnode_path
+                    else:
+                        newnode_path = self.var_last_appear[p]
+
+                    self.edges.append(f"{newnode_path}--->{newnode}")
+            else:
+                p = paths
+                if not self.var_last_appear.get(p):
+                    newnode_path = self.new_node(f"{p}")
+                    self.var_last_appear[p] = newnode_path
+                else:
+                    newnode_path = self.var_last_appear[p]
+                self.edges.append(f"{newnode_path}--->{newnode}")
+
         if rhs not in self.var_last_appear:
             # rhs must be const, just make lhs out of nowhere without edge
             self.var_last_appear[lhs] = newnode

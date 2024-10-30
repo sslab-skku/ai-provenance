@@ -72,6 +72,7 @@ class TaintInstrument(ast.NodeTransformer):
             if isinstance(rhs, ast.Call):
                 fnname = expr_to_string(rhs)[:-2]
 
+                print(fnname)
                 for func in self.int_funcs:
                     if func.name != fnname:
                         continue
@@ -84,9 +85,42 @@ class TaintInstrument(ast.NodeTransformer):
                 else:
                     # func is external fn
                     combinations = [[l, r] for l in lhs_flat for r in rhs_flat]
+                    loading_apis = ["ImageFolder", "torch.load"]
                     for combination in combinations:
+                        if fnname in loading_apis:
+                            # if "args.data_path" in rhs_flat:
+                                # print("print fname")
+                                # print("print fname")
+                            print(fnname)
+                            new_rhs_flat = rhs_flat
+                            if any(isinstance(r, list) for r in new_rhs_flat):
+                                # handle list of list lol
+                                new_rhs_flat = [r for r in new_rhs_flat[0]]
+ 
+
+                            print(new_rhs_flat)
+                            if len(new_rhs_flat) == 2:
+                                result.append(
+                                    create_log(
+                                        '"-"',
+                                        node.lineno,
+                                        f'"path"',
+                                        f"\"{combination[0]} <- '\" + str(os.listdir(os.path.join({new_rhs_flat[0]}, \"{new_rhs_flat[1].replace(" (const)","")}\")))  + \"'\" ",
+                                    )
+                                )
+                            else:
+                                result.append(
+                                    create_log(
+                                        '"-"',
+                                        node.lineno,
+                                        f'"path"',
+                                        f'"{combination[0]} <- \'" + str(os.listdir({new_rhs_flat[0]}) if os.path.isdir({new_rhs_flat[0]}) else {new_rhs_flat[0]}) + "\'"',
+                                    )
+                                )
+
                         # result.append(create_log("\"-\"", node.lineno, f"\"call: {fnname}\"", f"\"{combination[0]} <- {combination[1]}" + " :: \" + " + "f\"{id(" + f"{combination[0]}" + ")}\""))
                         result.append(create_log("\"-\"", node.lineno, f"\"extcall: {fnname}\"", f"\"{combination[0]} <- {combination[1]}\""))
+
             else:
                 if len(lhs_flat) == len(rhs_flat) and hasattr(rhs, "elts"):
                     # HACK: this is likely to be (a, b, c) = (1, 2, 3)
