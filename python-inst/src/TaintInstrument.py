@@ -74,7 +74,6 @@ class TaintInstrument(ast.NodeTransformer):
             if isinstance(rhs, ast.Call):
                 fnname = expr_to_string(rhs)[:-2]
 
-                # print(fnname)
                 for func in self.int_funcs:
                     if func.name != fnname:
                         continue
@@ -88,25 +87,23 @@ class TaintInstrument(ast.NodeTransformer):
                     # func is external fn
                     combinations = [[l, r] for l in lhs_flat for r in rhs_flat]
                     loading_apis = ["ImageFolder", "torch.load"]
+                    saving_apis = ["torch.save"]
                     for combination in combinations:
                         if fnname in loading_apis:
                             # if "args.data_path" in rhs_flat:
                                 # print("print fname")
                                 # print("print fname")
-                            print(fnname)
                             new_rhs_flat = rhs_flat
                             if any(isinstance(r, list) for r in new_rhs_flat):
                                 # handle list of list lol
                                 new_rhs_flat = [r for r in new_rhs_flat[0]]
- 
 
-                            print(new_rhs_flat)
                             if len(new_rhs_flat) == 2:
                                 result.append(
                                     create_log(
                                         '"-"',
                                         node.lineno,
-                                        f'"path"',
+                                        f'"pathR"',
                                         # f"\"{combination[0]} <- '\" + str(os.listdir(os.path.join({new_rhs_flat[0]}, \"{new_rhs_flat[1].replace(" (const)","")}\")))  + \"'\" ",
                                         f'"{combination[0]} <- \'" + str(os.listdir(os.path.join({new_rhs_flat[0]}, "{new_rhs_flat[1].replace(" (const)","")}")))  + "\'" ',
                                     )
@@ -116,7 +113,7 @@ class TaintInstrument(ast.NodeTransformer):
                                     create_log(
                                         '"-"',
                                         node.lineno,
-                                        f'"path"',
+                                        f'"pathR"',
                                         f'"{combination[0]} <- \'" + str(os.listdir({new_rhs_flat[0]}) if os.path.isdir({new_rhs_flat[0]}) else {new_rhs_flat[0]}) + "\'"',
                                     )
                                 )
@@ -168,24 +165,85 @@ class TaintInstrument(ast.NodeTransformer):
 
         return self.assign_family(node, lhss, rhs)
 
-    def visit_Call(self, node):
-        # ast.Call(func, args, keywords)
-        # all call here must be from Expr
+    def visit_Expr(self, node):
+        # ast.Expr(value)
+        # for handle call only
 
-        return node
+        result = [node]
+        if isinstance(node.value, ast.Call):
+            # ast.Call(func, args, keywords)
+            # all call here must be from Expr
 
-        fnname = expr_to_string(node)[:-2]
-        selfornot = fnname.split(".")[0]
-        if selfornot in self.import_as:
-            return node
-        if "." not in fnname:
-            return node
+            fnname = expr_to_string(node.value)[:-2]
 
-        # self <- args
-        aself = selfornot
-        args = node.args
+            saving_apis = ["torch.save"]
+            if fnname in saving_apis:
+                code = []
+                args = node.value.args
 
-        return node
+                # torch.save: save arg0 to arg1, so arg1 <- arg0
+                print("==========")
+                arg0 = args[0]
+                arg1 = ast.unparse(args[1])
+                code = []
+                arg0_flat = log_flatten(arg0, code, node.value.lineno)
+                # SUPER HACK
+                arg0_name = expr_to_string(arg0_flat).split(".")[0]
+
+                code.append(create_log("\"-\"", node.value.lineno, f"\"pathL\"", f"f\"{{{arg1}}} <- {arg0_name}\""))
+                result.extend(code)
+
+                return result
+
+            selfornot = fnname.split(".")[0]
+            if selfornot in self.import_as:
+                return result
+
+            known_trivial = ["print", "len"]
+            if fnname in known_trivial:
+                # heuristic: known name
+                return result
+
+            # self <- args
+            aself = selfornot
+            args = node.value.args
+
+            code = []
+            args_flat = log_flatten(args, code, node.value.lineno)
+            for arg in args_flat:
+                if isinstance(arg, ast.Constant):
+                    continue
+                code.append(create_log("\"-\"", node.value.lineno, f"\"callarg: {aself}\"", f"\" <- {expr_to_string(arg)}\""))
+            result.extend(code)
+
+            '''
+                            new_rhs_flat = rhs_flat
+                            if any(isinstance(r, list) for r in new_rhs_flat):
+                                # handle list of list lol
+                                new_rhs_flat = [r for r in new_rhs_flat[0]]
+
+                            if len(new_rhs_flat) == 2:
+                                result.append(
+                                    create_log(
+                                        '"-"',
+                                        node.lineno,
+                                        f'"path"',
+                                        # f"\"{combination[0]} <- '\" + str(os.listdir(os.path.join({new_rhs_flat[0]}, \"{new_rhs_flat[1].replace(" (const)","")}\")))  + \"'\" ",
+                                        f'"{combination[0]} <- \'" + str(os.listdir(os.path.join({new_rhs_flat[0]}, "{new_rhs_flat[1].replace(" (const)","")}")))  + "\'" ',
+                                    )
+                                )
+                            else:
+                                result.append(
+                                    create_log(
+                                        '"-"',
+                                        node.lineno,
+                                        f'"path"',
+                                        f'"{combination[0]} <- \'" + str(os.listdir({new_rhs_flat[0]}) if os.path.isdir({new_rhs_flat[0]}) else {new_rhs_flat[0]}) + "\'"',
+                                    )
+                                )
+            '''
+
+        return result
 
     def visit_FunctionDef(self, node):
         # visit children first

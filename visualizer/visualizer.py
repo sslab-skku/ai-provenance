@@ -92,10 +92,16 @@ class Script:
     def create_edge(self):
         pass
 
-    def new_node(self, action):
+    def find_node(self, node):
         for (k, v) in self.nodes.items():
-            if v == action:
+            if v == node:
                 return k
+        return None
+
+    def new_node(self, action):
+        find = self.find_node(action)
+        if find is not None:
+            return find
 
         nodename = f"SC{self.scriptid}N{len(self.nodes)+1}"
         self.nodes[nodename] = action
@@ -143,6 +149,15 @@ class Script:
             # diff scope
             callee = action.split(": ")[1]
             self.dataflow(lineno, action, f"{lhs} ({callee})", f"{rhs} ({scope})")
+            self.dataflow(lineno, action, f"{rhs} ({scope})", f"{lhs} ({callee})")
+        elif "extcall" in action:
+            # HACK: callee might be callable, so try callee <- arg
+            callee = action.split(": ")[1]
+            maybecallable = self.find_node(f"{callee} ({scope})")
+            if maybecallable is not None:
+                self.dataflow(lineno, "callable", f"{callee} ({scope})", f"{rhs} ({scope})")
+                self.dataflow(lineno, "callable", f"{lhs} ({scope})", f"{callee} ({scope})")
+            self.dataflow(lineno, action, f"{lhs} ({scope})", f"{rhs} ({scope})")
         else:
             self.dataflow(lineno, action, f"{lhs} ({scope})", f"{rhs} ({scope})")
 
@@ -170,12 +185,27 @@ class Script:
         if "path" in action and "extcall" not in action:
             import ast
             # Heuristic to detect list
-            rhs = rhs.split(" (")[0]
-            if rhs[1] == "[" and rhs[-2]=="]":
-                rhs = rhs[1:-1]
-            paths = ast.literal_eval(rhs)
-            if isinstance(paths, list):
-                for p in paths:
+
+            if "pathR" in action:
+                rhs = rhs.split(" (")[0]
+                if rhs[1] == "[" and rhs[-2]=="]":
+                    rhs = rhs[1:-1]
+                paths = ast.literal_eval(rhs)
+                if isinstance(paths, list):
+                    for p in paths:
+                        '''
+                        if not self.var_last_appear.get(p):
+                            newnode_path = self.new_db(f"{p}")
+                            self.var_last_appear[p] = newnode_path
+                        else:
+                            newnode_path = self.var_last_appear[p]
+                        '''
+                        newnode_path = self.new_db(f"{p}")
+                        self.var_last_appear[p] = newnode_path
+
+                        self.edges.append(f"{newnode_path}--{lineno}-->{newnode}")
+                else:
+                    p = paths
                     '''
                     if not self.var_last_appear.get(p):
                         newnode_path = self.new_db(f"{p}")
@@ -185,20 +215,17 @@ class Script:
                     '''
                     newnode_path = self.new_db(f"{p}")
                     self.var_last_appear[p] = newnode_path
-
-                    self.edges.append(f"{newnode_path}--->{newnode}")
+                    self.edges.append(f"{newnode_path}--{lineno}-->{newnode}")
             else:
-                p = paths
-                '''
-                if not self.var_last_appear.get(p):
-                    newnode_path = self.new_db(f"{p}")
-                    self.var_last_appear[p] = newnode_path
-                else:
-                    newnode_path = self.var_last_appear[p]
-                '''
-                newnode_path = self.new_db(f"{p}")
-                self.var_last_appear[p] = newnode_path
-                self.edges.append(f"{newnode_path}--->{newnode}")
+                # pathL
+                lhs = lhs.split(" (")[0]
+                p = lhs
+
+                newnode_path = self.new_model(f"{p}")
+                self.var_last_appear[lhs] = newnode_path
+                rhs_appear = self.var_last_appear[rhs]
+
+                self.edges.append(f"{rhs_appear}--{lineno}-->{newnode_path}")
         else:
             if rhs not in self.var_last_appear:
                 # rhs must be const, just make lhs out of nowhere without edge
@@ -212,6 +239,8 @@ class Script:
     def taint(self):
         for database in self.databases.values():
             self.tags[database] = "DATABASE"
+        for model in self.models.values():
+            self.tags[model] = "MODEL"
 
         # SCENARIO: Won_bin is now private and needs to be unlearned
         self.tags[self.databases["Won_bin"]] = "UNLEARN"

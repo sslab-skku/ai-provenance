@@ -29,7 +29,6 @@ class InternalFunctions(ast.NodeVisitor):
             ret = []
             for flat in retvec:
                 ret.append(list(map(lambda fl: expr_to_string(fl), flatten(flat))))
-            print(YEL(f"{ret}"))
             retvals.append(ret)
 
         fn = IntFunc(node, retvals)
