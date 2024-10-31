@@ -38,20 +38,18 @@ class Graph:
         for script in self.scripts.values():
             graph += f"subgraph sc{script.scriptid} [\"{script.name}\"]\n"
             for (nodename, node) in script.nodes.items():
-                if script.tags.get(nodename) != None:
+                # if script.tags.get(nodename) != None:
+                #     graph += "    " + nodename + "(\"" + node + "\")\n"
+                if "DATABASE" in script.tags.get(nodename, ""):
                     graph += "    " + nodename + "(\"" + node + "\")\n"
 
             sensitive_edges = []
-            skipped = 0
             for (i, edge) in enumerate(script.edges):
                 lhs = edge.split("--")[0]
                 rhs = edge.split("-->")[1]
-                if script.tags.get(lhs) == None or script.tags.get(rhs) == None:
-                    skipped += 1
-                    continue
 
-                if script.tags.get(lhs) == "UNLEARN":
-                    sensitive_edges.append(i - skipped)
+                if "UNLEARN" in script.tags.get(lhs, "") and "MODEL" in script.tags.get(rhs, ""):
+                    sensitive_edges.append(i)
 
                 if lhs in script.databases.values() \
                     or rhs in script.models.values():
@@ -243,7 +241,7 @@ class Script:
             self.tags[model] = "MODEL"
 
         # SCENARIO: Won_bin is now private and needs to be unlearned
-        self.tags[self.databases["Won_bin"]] = "UNLEARN"
+        self.tags[self.databases["Won_bin"]] += " UNLEARN"
 
         changed = True
         while changed:
@@ -251,14 +249,31 @@ class Script:
             for edge in self.edges:
                 lhs = edge.split("--")[0]
                 rhs = edge.split("-->")[1]
-                if self.tags.get(lhs) == "DATABASE" \
-                    and (self.tags.get(rhs) != "DATABASE" and self.tags.get(rhs) != "UNLEARN"):
+                if "DATABASE" in self.tags.get(lhs, "") \
+                        and "DATABASE" not in self.tags.get(rhs, ""):
                     changed = True
-                    self.tags[rhs] = "DATABASE"
-                if self.tags.get(lhs) == "UNLEARN" \
-                    and self.tags.get(rhs) != "UNLEARN":
+                    if self.tags.get(rhs) == None:
+                        self.tags[rhs] = ""
+                    self.tags[rhs] += " DATABASE"
+                if "UNLEARN" in self.tags.get(lhs, "") \
+                        and "UNLEARN" not in self.tags.get(rhs, ""):
                     changed = True
-                    self.tags[rhs] = "UNLEARN"
+                    if self.tags.get(rhs) == None:
+                        self.tags[rhs] = ""
+                    self.tags[rhs] += " UNLEARN"
+
+        changed = True
+        while changed:
+            changed = False
+            for edge in self.edges:
+                lhs = edge.split("--")[0]
+                rhs = edge.split("-->")[1]
+                if "MODEL" in self.tags.get(rhs, "") \
+                        and "MODEL" not in self.tags.get(lhs, ""):
+                    changed = True
+                    if self.tags.get(lhs) == None:
+                        self.tags[lhs] = ""
+                    self.tags[lhs] += " MODEL"
 
     def sort_edges(self):
         result = []
@@ -280,6 +295,16 @@ class Script:
             rhs = edge.split("-->")[1]
             if lhs not in self.databases.values() and rhs not in self.models.values():
                 result.append(edge)
+
+        delete_idx = []
+        for i, edge in enumerate(result):
+            lhs = edge.split("--")[0]
+            rhs = edge.split("-->")[1]
+            if "DATABASE" not in self.tags.get(lhs, ""):
+                delete_idx.append(i)
+
+        for didx in reversed(delete_idx):
+            result.pop(didx)
 
         self.edges = result
 
