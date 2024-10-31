@@ -15,9 +15,12 @@ from Logger import Logger
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--input", type=str, default="target.py")
-    parser.add_argument("-o", "--output", type=str, default="target.inst.py")
+    parser.add_argument("-o", "--output", type=str)
 
     args = parser.parse_args()
+    if args.output == None:
+        root, ext = os.path.splitext(args.input)
+        args.output = root + ".inst.py"
     return args
 
 def main(args):
