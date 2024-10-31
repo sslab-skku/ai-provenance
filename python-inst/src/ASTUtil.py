@@ -21,8 +21,8 @@ def expr_to_string(node):
     elif isinstance(node, ast.Call):
         return expr_to_string(node.func) + "()"
     else:
-        print(RED("NOO"))
-        print(ast.dump(node))
+        # print(RED("NOO"))
+        # print(ast.dump(node))
         return ""
 
 def flatten(node):

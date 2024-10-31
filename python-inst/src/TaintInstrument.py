@@ -182,7 +182,6 @@ class TaintInstrument(ast.NodeTransformer):
                 args = node.value.args
 
                 # torch.save: save arg0 to arg1, so arg1 <- arg0
-                print("==========")
                 arg0 = args[0]
                 arg1 = ast.unparse(args[1])
                 code = []
@@ -314,5 +313,4 @@ class TaintInstrument(ast.NodeTransformer):
         return [prologue, code, node] + result + [epilogue]
 
     def visit_Subscript(self, node):
-        # print(ast.dump(node))
         return node
