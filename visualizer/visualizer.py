@@ -1,8 +1,21 @@
 #!/usr/bin/env python3
 
 import csv
+import os
+import argparse
 
 set_dbfile = set()
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-i", "--input", type=str, default="logfile")
+    parser.add_argument("-o", "--output", type=str)
+
+    args = parser.parse_args()
+    if args.output == None:
+        root, ext = os.path.splitext(args.input)
+        args.output = root + ".mmd"
+    return args
 
 class Graph:
     def __init__(self):
@@ -13,7 +26,7 @@ class Graph:
             self.scripts[sname] = Script(sname, len(self.scripts) + 1)
         return self.scripts[sname]
 
-    def visualize(self):
+    def visualize(self, graphfile):
         graph = ""
         graph += "graph LR\n"
         graph += "\n"
@@ -62,8 +75,7 @@ class Graph:
 
             graph += "end\n"
 
-        print(graph)
-        with  open("graph.mmd", "w") as f:
+        with open(graphfile, "w") as f:
             f.write(graph)
             f.close()
 
@@ -308,8 +320,8 @@ class Script:
 
         self.edges = result
 
-def main():
-    logfile = "logfile"
+def main(args):
+    logfile = args.input
     graph = Graph()
 
     with open(logfile, "r") as f_log:
@@ -336,7 +348,8 @@ def main():
         graph.get_script(script).taint()
         graph.get_script(script).sort_edges()
 
-    graph.visualize()
+    graph.visualize(args.output)
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(args)

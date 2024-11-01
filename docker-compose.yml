@@ -1,0 +1,12 @@
+version: '3'
+services:
+  instrumenter:
+    build: ./python-inst
+    image: provenance:instrumenter
+    volumes:
+      - ./target:/target
+  visualizer:
+    build: ./visualizer
+    image: provenance:visualizer
+    volumes:
+      - ./target:/target
